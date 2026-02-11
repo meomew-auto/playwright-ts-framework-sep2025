@@ -53,22 +53,23 @@ jobs:
     timeout-minutes: 30
 
     # ─────────────────────────────────────────────────────────────
-    # Environment Variables
-    # NODE_ENV → dotenv-flow load: .env → .env.{NODE_ENV}
-    # Secrets → inject trực tiếp vào process.env (override .env files)
+    # GitHub Environment — secrets ăn theo environment
+    # Repo Settings → Environments → development / uat
+    # Mỗi environment có bộ secrets riêng (passwords có thể khác nhau)
     # ─────────────────────────────────────────────────────────────
+    environment: ${{ inputs.environment || 'development' }}
+
     env:
       NODE_ENV: ${{ inputs.environment || 'development' }}
       CI: true
       LOG_LEVEL: warn
 
-      # Neko Coffee secrets
+      # Secrets — tự động lấy từ GitHub Environment tương ứng
       NEKO_ADMIN_USERNAME: ${{ secrets.NEKO_ADMIN_USERNAME }}
       NEKO_ADMIN_PASSWORD: ${{ secrets.NEKO_ADMIN_PASSWORD }}
       NEKO_STAFF_USERNAME: ${{ secrets.NEKO_STAFF_USERNAME }}
       NEKO_STAFF_PASSWORD: ${{ secrets.NEKO_STAFF_PASSWORD }}
 
-      # CMS secrets
       CMS_ADMIN_EMAIL: ${{ secrets.CMS_ADMIN_EMAIL }}
       CMS_ADMIN_PASSWORD: ${{ secrets.CMS_ADMIN_PASSWORD }}
 
