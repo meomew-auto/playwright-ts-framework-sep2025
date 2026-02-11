@@ -1,0 +1,37 @@
+{
+  "name": "playwright-ts-framework",
+  "version": "1.0.0",
+  "description": "",
+  "main": "index.js",
+  "scripts": {
+    "test": "npx playwright test",
+    "test:dev": "cross-env NODE_ENV=development npx playwright test",
+    "test:uat": "cross-env NODE_ENV=uat npx playwright test",
+
+    "test:cms": "cross-env NODE_ENV=development npx playwright test --project=cms-setup --project=cms-desktop",
+    "test:cms:mobile": "cross-env NODE_ENV=development npx playwright test --project=cms-setup --project=cms-mobile",
+    "test:cms:uat": "cross-env NODE_ENV=uat npx playwright test --project=cms-setup --project=cms-desktop",
+
+    "test:neko:ui": "cross-env NODE_ENV=development npx playwright test --project=neko-setup --project=neko-ui",
+    "test:neko:api": "cross-env NODE_ENV=development npx playwright test --project=neko-setup --project=neko-api",
+    "test:neko:api:uat": "cross-env NODE_ENV=uat npx playwright test --project=neko-setup --project=neko-api",
+
+    "report": "npx playwright show-report"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "devDependencies": {
+    "@faker-js/faker": "^10.1.0",
+    "@playwright/test": "^1.57.0",
+    "@types/node": "^24.10.1",
+    "cross-env": "^10.1.0"
+  },
+  "dependencies": {
+    "allure-js-commons": "^3.4.3",
+    "allure-playwright": "^3.4.3",
+    "dotenv-flow": "^4.1.0",
+    "winston": "^3.19.0",
+    "zod": "^4.3.6"
+  }
+}

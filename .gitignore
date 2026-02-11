@@ -1,0 +1,27 @@
+
+# Playwright
+node_modules/
+/test-results/
+/playwright-report/
+/blob-report/
+/playwright/.cache/
+
+# Auth storage state (auto-generated bởi setup project)
+.auth/
+auth/
+
+# ══════════════════════════════════════════════════════════════════════
+# Biến môi trường
+# ──────────────────────────────────────────────────────────────────────
+# ✅ PUSH lên git (public config, không chứa secrets):
+#    .env          ← defaults (URLs, timeouts)
+#    .env.uat      ← UAT config (URLs khác dev)
+#
+# ❌ GITIGNORE (chứa secrets — passwords, tokens):
+#    .env.development       ← dev credentials
+#    .env.*.local           ← local overrides
+# ──────────────────────────────────────────────────────────────────────
+.env.development
+.env.local
+.env.*.local
+.agent/

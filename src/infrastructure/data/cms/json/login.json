@@ -1,0 +1,70 @@
+{
+  "validCredentials": {
+    "description": "Thông tin đăng nhập hợp lệ",
+    "data": {
+      "email": "admin@example.com",
+      "password": "123456"
+    }
+  },
+  "negativeTestCases": {
+    "description": "Danh sách test cases đăng nhập thất bại (parameterized)",
+    "data": [
+      {
+        "testName": "TC_05: Để trống cả email và password",
+        "email": "",
+        "password": "",
+        "expectedError": "",
+        "validationType": "field"
+      },
+      {
+        "testName": "TC_06: Để trống email",
+        "email": "",
+        "password": "123456",
+        "expectedError": "",
+        "validationType": "field"
+      },
+      {
+        "testName": "TC_07: Để trống password",
+        "email": "admin@example.com",
+        "password": "",
+        "expectedError": "",
+        "validationType": "field"
+      },
+      {
+        "testName": "TC_08: Email sai định dạng (browser validation)",
+        "email": "invalidemail",
+        "password": "123456",
+        "expectedError": "",
+        "validationType": "browser"
+      },
+      {
+        "testName": "TC_09: Email sai",
+        "email": "wrong@example.com",
+        "password": "123456",
+        "expectedError": "Invalid login credentials",
+        "validationType": "server"
+      },
+      {
+        "testName": "TC_10: Password sai",
+        "email": "admin@example.com",
+        "password": "wrongpassword",
+        "expectedError": "Invalid login credentials",
+        "validationType": "server"
+      },
+      {
+        "testName": "TC_11: Cả email và password đều sai",
+        "email": "wrong@example.com",
+        "password": "wrongpassword",
+        "expectedError": "Invalid login credentials",
+        "validationType": "server"
+      },
+      {
+        "testName": "TC_12: SQL injection",
+        "email": "admin'or'1'='1'@example.com",
+        "password": "123456",
+        "expectedError": "Invalid login credentials",
+        "validationType": "server"
+      }
+    ]
+  }
+}

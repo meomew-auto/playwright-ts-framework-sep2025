@@ -1,0 +1,89 @@
+{
+  "minimal": {
+    "description": "Required fields only for product creation",
+    "data": {
+      "name": "Auto Minimal Product",
+      "category": "Sport shoes",
+      "unit": "Pc",
+      "minQty": 1,
+      "unitPrice": 100.00,
+      "quantity": 10
+    }
+  },
+  "full": {
+    "description": "All fields populated",
+    "data": {
+      "name": "Auto Full Product",
+      "category": "Sport shoes",
+      "brand": "MiuMiu",
+      "unit": "Pc",
+      "weight": 0.5,
+      "minQty": 1,
+      "tags": ["test", "product", "automation"],
+      "barcode": "1234567890",
+      "unitPrice": 150.00,
+      "discount": 10,
+      "discountType": "Percent",
+      "quantity": 50,
+      "sku": "SKU-AUTO-FULL",
+      "description": "This is a complete test product description created by automation.",
+      "metaTitle": "Meta Title for Auto Full Product",
+      "metaDescription": "Meta description for Auto Full Product",
+      "featured": true,
+      "todaysDeal": false,
+      "cashOnDelivery": true,
+      "lowStockQuantity": 5,
+      "stockVisibilityState": "quantity",
+      "colors": ["Red", "Blue"],
+      "colorsActive": true,
+      "attributes": ["Size"],
+      "videoProvider": "Youtube",
+      "videoLink": "https://www.youtube.com/watch?v=test123",
+      "estShippingDays": 3,
+      "tax": 10,
+      "taxType": "Percent"
+    }
+  },
+  "withVariations": {
+    "description": "Product with color and attribute variations",
+    "data": {
+      "name": "Auto Variation Product",
+      "category": "Sport shoes",
+      "unit": "Pc",
+      "minQty": 1,
+      "unitPrice": 200.00,
+      "quantity": 20,
+      "colors": ["Red", "Blue", "Green"],
+      "colorsActive": true,
+      "attributes": ["Size", "Quality"]
+    }
+  },
+  "withDiscount": {
+    "description": "Product with discount configuration",
+    "data": {
+      "name": "Auto Discount Product",
+      "category": "Sport shoes",
+      "unit": "Pc",
+      "minQty": 1,
+      "unitPrice": 200.00,
+      "discount": 15,
+      "discountType": "Percent",
+      "quantity": 15
+    }
+  },
+  "featuredProduct": {
+    "description": "Featured product configuration",
+    "data": {
+      "name": "Auto Featured Product",
+      "category": "Sport shoes",
+      "unit": "Pc",
+      "minQty": 1,
+      "unitPrice": 300.00,
+      "quantity": 25,
+      "featured": true,
+      "todaysDeal": true,
+      "cashOnDelivery": true
+    }
+  }
+}
+

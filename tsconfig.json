@@ -1,0 +1,65 @@
+{
+  "compilerOptions": {
+    "target": "ES2022",
+    "module": "ESNext",
+    "lib": ["ES2022"],
+    "moduleResolution": "node",
+    "resolveJsonModule": true,
+    "esModuleInterop": true,
+    "skipLibCheck": true,
+    "strict": true,
+    "baseUrl": ".",
+    "paths": {
+      // Core aliases
+      "@infrastructure/*": ["src/infrastructure/*"],
+      "@presentation/*": ["src/presentation/*"],
+      
+      // Fixtures - per project
+      "@fixtures/common/*": ["src/infrastructure/fixtures/common/*"],
+      "@fixtures/cms": ["src/infrastructure/fixtures/cms"],
+      "@fixtures/cms/*": ["src/infrastructure/fixtures/cms/*"],
+      "@fixtures/neko": ["src/infrastructure/fixtures/neko"],
+      "@fixtures/neko/*": ["src/infrastructure/fixtures/neko/*"],
+      
+      // Pages - per project
+      "@pages/base/*": ["src/infrastructure/pages/base/*"],
+      "@pages/cms/*": ["src/infrastructure/pages/cms/*"],
+      "@pages/neko/*": ["src/infrastructure/pages/neko-coffee/*"],
+      
+      // Helpers - common + per project
+      "@helpers": ["src/infrastructure/helpers"],
+      "@helpers/common": ["src/infrastructure/helpers/common"],
+      "@helpers/common/*": ["src/infrastructure/helpers/common/*"],
+      "@helpers/cms": ["src/infrastructure/helpers/cms"],
+      "@helpers/cms/*": ["src/infrastructure/helpers/cms/*"],
+      
+      // Collection helpers (shortcut)
+      "@collection/*": ["src/infrastructure/helpers/common/collection/*"],
+      
+      // Utils & Models
+      "@utils/*": ["src/infrastructure/utils/*"],
+      "@models/common/*": ["src/infrastructure/models/common/*"],
+      "@models/cms/*": ["src/infrastructure/models/cms/*"],
+      "@models/neko/*": ["src/infrastructure/models/neko/*"],
+      
+      // API Services & Schemas
+      "@api/base/*": ["src/infrastructure/api/services/base/*"],
+      "@api/neko/*": ["src/infrastructure/api/services/neko/*"],
+      "@api/cms/*": ["src/infrastructure/api/services/cms/*"],
+      "@schemas/neko/*": ["src/infrastructure/api/schemas/neko/*"],
+      "@schemas/cms/*": ["src/infrastructure/api/schemas/cms/*"],
+      
+      // Components - per project
+      "@components/cms/*": ["src/infrastructure/components/cms/*"],
+      "@components/neko/*": ["src/infrastructure/components/neko/*"],
+      
+      // Data - per project
+      "@data/common/*": ["src/infrastructure/data/common/*"],
+      "@data/cms/*": ["src/infrastructure/data/cms/*"],
+      "@data/neko/*": ["src/infrastructure/data/neko/*"]
+    }
+  },
+  "include": ["src/**/*", "tests/**/*"],
+  "exclude": ["node_modules"]
+}
+

@@ -1,0 +1,89 @@
+{
+  "minimal": {
+    "description": "Required fields only for product creation (DEV)",
+    "data": {
+      "name": "Auto Minimal Product DEV",
+      "category": "Sport shoes",
+      "unit": "Pc",
+      "minQty": 1,
+      "unitPrice": 50.00,
+      "quantity": 5
+    }
+  },
+  "full": {
+    "description": "All fields populated (DEV)",
+    "data": {
+      "name": "Auto Full Product DEV",
+      "category": "Sport shoes",
+      "brand": "MiuMiu",
+      "unit": "Pc",
+      "weight": 0.3,
+      "minQty": 1,
+      "tags": ["dev", "test", "product"],
+      "barcode": "DEV123456",
+      "unitPrice": 100.00,
+      "discount": 5,
+      "discountType": "Percent",
+      "quantity": 20,
+      "sku": "SKU-DEV-FULL",
+      "description": "DEV: This is a complete test product description.",
+      "metaTitle": "DEV Meta Title",
+      "metaDescription": "DEV Meta description",
+      "featured": false,
+      "todaysDeal": false,
+      "cashOnDelivery": true,
+      "lowStockQuantity": 3,
+      "stockVisibilityState": "quantity",
+      "colors": ["Red"],
+      "colorsActive": true,
+      "attributes": ["Size"],
+      "videoProvider": "Youtube",
+      "videoLink": "https://www.youtube.com/watch?v=dev123",
+      "estShippingDays": 2,
+      "tax": 5,
+      "taxType": "Percent"
+    }
+  },
+  "withVariations": {
+    "description": "Product with color and attribute variations (DEV)",
+    "data": {
+      "name": "Auto Variation Product DEV",
+      "category": "Sport shoes",
+      "unit": "Pc",
+      "minQty": 1,
+      "unitPrice": 150.00,
+      "quantity": 10,
+      "colors": ["Red", "Blue"],
+      "colorsActive": true,
+      "attributes": ["Size"]
+    }
+  },
+  "withDiscount": {
+    "description": "Product with discount configuration (DEV)",
+    "data": {
+      "name": "Auto Discount Product DEV",
+      "category": "Sport shoes",
+      "unit": "Pc",
+      "minQty": 1,
+      "unitPrice": 150.00,
+      "discount": 10,
+      "discountType": "Percent",
+      "quantity": 10
+    }
+  },
+  "featuredProduct": {
+    "description": "Featured product configuration (DEV)",
+    "data": {
+      "name": "Auto Featured Product DEV",
+      "category": "Sport shoes",
+      "unit": "Pc",
+      "minQty": 1,
+      "unitPrice": 200.00,
+      "quantity": 15,
+      "featured": true,
+      "todaysDeal": false,
+      "cashOnDelivery": true
+    }
+  }
+}
+
