@@ -81,7 +81,7 @@ export default defineConfig<CustomTestOptions>({
 
     /* Thu trace khi retry test thất bại */
     trace: 'on-first-retry',
-    headless: false,
+    headless: !!process.env.CI, // CI: true (no display), Local: false (headed)
 
     /* Timeout cho actions (click, fill, ...) */
     actionTimeout: 15000,
