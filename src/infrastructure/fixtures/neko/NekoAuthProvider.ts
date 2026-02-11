@@ -28,6 +28,7 @@
 
 import { APIRequestContext } from '@playwright/test';
 import { EnvManager } from '../../utils/EnvManager';
+import { Logger } from '../../utils/Logger';
 import { BaseAuthProvider } from '../common/auth/BaseAuthProvider';
 import { extractUserFromToken, isTokenValid } from '../common/auth/jwt.utils';
 import { getLocalStorageValue } from '../common/auth/storage-state.utils';
@@ -117,7 +118,18 @@ export class NekoAuthProvider extends BaseAuthProvider {
     });
 
     if (!response.ok()) {
-      throw new Error(`[NEKO] Login failed for ${role}: ${response.status()}`);
+      const body = await response.text().catch(() => '(no body)');
+      Logger.error(`[NEKO] Login failed for "${role}": ${response.status()}`, {
+        context: 'setup',
+        data: {
+          url: `${this.config.apiUrl}/auth/login`,
+          username: creds.username || '(EMPTY — thiếu env NEKO_ADMIN_USERNAME?)',
+          password: creds.password ? '***' : '(EMPTY — thiếu env NEKO_ADMIN_PASSWORD?)',
+          response: body,
+          hint: 'Nếu chạy CI → kiểm tra GitHub Settings → Environments → Secrets',
+        },
+      });
+      throw new Error(`[NEKO] Login failed for "${role}": ${response.status()}`);
     }
 
     const data = await response.json();
