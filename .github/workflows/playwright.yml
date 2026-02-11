@@ -138,20 +138,36 @@ jobs:
       # ─────────────────────────────────────────────────────────────
       # 📊 Reports — Allure + Playwright HTML
       # ─────────────────────────────────────────────────────────────
-      - name: 📥 Download Previous Allure History
+      - name: 📥 Download Previous History
         if: always()
         continue-on-error: true
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
+          echo "Finding previous run with history artifact..."
           PREV_RUN=$(gh run list --workflow=playwright.yml --status=completed --limit=5 --json databaseId -q '.[0].databaseId')
+          echo "Previous run ID: $PREV_RUN"
           if [ -n "$PREV_RUN" ]; then
-            gh run download $PREV_RUN --name allure-history --dir . 2>/dev/null || echo "No history yet"
+            gh run download $PREV_RUN --name allure-history --dir . 2>/dev/null && echo "Downloaded from run $PREV_RUN!" || echo "No history artifact in run $PREV_RUN"
+          else
+            echo "No previous completed runs found"
           fi
+          ls -la ./history.jsonl 2>/dev/null || echo "history.jsonl not found"
+
+      - name: 🔍 Debug History Status
+        if: always()
+        run: |
+          echo "Looking for history.jsonl..."
+          ls -la ./history.jsonl 2>/dev/null && cat ./history.jsonl | head -c 200 || echo "Not found - will create new"
 
       - name: 📊 Generate Allure Report
         if: always()
-        run: npx allure awesome ./allure-results --output ./allure-report --history-path ./history.jsonl
+        run: |
+          echo "History file before generate:"
+          cat ./history.jsonl 2>/dev/null || echo "No history file yet (first run)"
+          npx allure awesome ./allure-results --output ./allure-report --history-path ./history.jsonl
+          echo "History file after generate:"
+          cat ./history.jsonl 2>/dev/null | head -c 500 || echo "History file not created"
 
       - name: 📤 Upload Allure History
         uses: actions/upload-artifact@v4
@@ -178,7 +194,7 @@ jobs:
           path: allure-report/
           retention-days: 30
 
-      - name: 📤 Upload Allure Results
+      - name: 📤 Upload Allure Results (for history)
         uses: actions/upload-artifact@v4
         if: always()
         with:
@@ -186,18 +202,12 @@ jobs:
           path: allure-results/
           retention-days: 7
 
-  # ══════════════════════════════════════════════════════════════════════════════
-  # 🚀 DEPLOY REPORT → GitHub Pages
-  # ══════════════════════════════════════════════════════════════════════════════
+  # ==================== DEPLOY REPORT ====================
   deploy-report:
-    name: 🚀 Deploy to GitHub Pages
+    name: 🚀 Deploy Allure to GitHub Pages
     needs: test
     if: always() && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/feature/ci')
     runs-on: ubuntu-latest
-    # Chỉ 1 Pages deploy chạy tại 1 thời điểm, không cancel giữa chừng
-    concurrency:
-      group: pages-deploy
-      cancel-in-progress: false
     permissions:
       pages: write
       id-token: write
@@ -223,15 +233,16 @@ jobs:
         with:
           enablement: true
 
-      - name: 📄 Create Index Page
+      - name: � Create Index Page
         run: |
+          # Find actual allure report path (may have /awesome subfolder)
           if [ -d "./site/allure/awesome" ]; then
             ALLURE_PATH="allure/awesome"
           else
             ALLURE_PATH="allure"
           fi
-
-          cat > ./site/index.html << EOF
+          
+          cat > ./site/index.html << 'EOF'
           <!DOCTYPE html>
           <html lang="en">
           <head>
@@ -254,21 +265,27 @@ jobs:
             <div class="container">
               <h1>🎭 Test Reports</h1>
               <div class="cards">
-                <a href="${ALLURE_PATH}/index.html" class="card">
+                <a href="ALLURE_PATH_PLACEHOLDER/index.html" class="card">
                   <div class="icon">📊</div>
                   <h2>Allure Report</h2>
-                  <p>Chi tiết kết quả test với lịch sử trends</p>
+                  <p>Detailed test results with history trends</p>
                 </a>
                 <a href="playwright/index.html" class="card">
                   <div class="icon">🎬</div>
                   <h2>Playwright Report</h2>
-                  <p>Playwright HTML report với traces</p>
+                  <p>Native Playwright HTML report with traces</p>
                 </a>
               </div>
             </div>
           </body>
           </html>
           EOF
+          
+          # Replace placeholder with actual path
+          sed -i "s|ALLURE_PATH_PLACEHOLDER|$ALLURE_PATH|g" ./site/index.html
+          
+          echo "Site structure:"
+          ls -la ./site/
 
       - name: 📤 Upload Pages artifact
         uses: actions/upload-pages-artifact@v3
