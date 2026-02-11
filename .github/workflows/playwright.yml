@@ -1,10 +1,5 @@
 name: Playwright Tests
 
-# Cancel old runs when new push arrives (saves CI minutes + prevents stale deploys)
-concurrency:
-  group: ${{ github.workflow }}-${{ github.ref }}
-  cancel-in-progress: true
-
 # ══════════════════════════════════════════════════════════════════════════════
 # TRIGGERS
 # ══════════════════════════════════════════════════════════════════════════════
@@ -127,9 +122,9 @@ jobs:
           # Build command
           CMD="npx playwright test $PROJECTS"
 
-          # Tag filter
+          # Tag filter (Playwright dùng --grep, không phải --tag)
           if [ -n "$TAG" ]; then
-            CMD="$CMD --tag \"$TAG\""
+            CMD="$CMD --grep \"$TAG\""
           fi
 
           echo "📋 Suite:       $SUITE"
@@ -199,6 +194,10 @@ jobs:
     needs: test
     if: always() && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/feature/ci')
     runs-on: ubuntu-latest
+    # Chỉ 1 Pages deploy chạy tại 1 thời điểm, không cancel giữa chừng
+    concurrency:
+      group: pages-deploy
+      cancel-in-progress: false
     permissions:
       pages: write
       id-token: write
