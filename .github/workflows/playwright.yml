@@ -1,5 +1,10 @@
 name: Playwright Tests
 
+# Cancel old runs when new push arrives (saves CI minutes + prevents stale deploys)
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 # ══════════════════════════════════════════════════════════════════════════════
 # TRIGGERS
 # ══════════════════════════════════════════════════════════════════════════════
@@ -88,17 +93,18 @@ jobs:
 
       - name: 🗄️ Cache Playwright Browsers
         id: playwright-cache
+        if: inputs.suite != 'neko-api' || github.event_name != 'workflow_dispatch'
         uses: actions/cache@v4
         with:
           path: ~/.cache/ms-playwright
           key: playwright-${{ runner.os }}-${{ hashFiles('package-lock.json') }}
 
       - name: 🎭 Install Playwright Browsers
-        if: steps.playwright-cache.outputs.cache-hit != 'true'
+        if: (inputs.suite != 'neko-api' || github.event_name != 'workflow_dispatch') && steps.playwright-cache.outputs.cache-hit != 'true'
         run: npx playwright install --with-deps chromium
 
       - name: 🎭 Install Playwright Dependencies (if cached)
-        if: steps.playwright-cache.outputs.cache-hit == 'true'
+        if: (inputs.suite != 'neko-api' || github.event_name != 'workflow_dispatch') && steps.playwright-cache.outputs.cache-hit == 'true'
         run: npx playwright install-deps chromium
 
       # ─────────────────────────────────────────────────────────────
