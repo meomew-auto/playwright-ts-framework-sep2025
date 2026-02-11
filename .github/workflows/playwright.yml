@@ -108,13 +108,13 @@ jobs:
           SUITE="${{ inputs.suite || 'neko-api' }}"
           TAG="${{ inputs.tag }}"
 
-          # Suite → Project mapping (tự động kèm setup project)
+          # Suite → Project mapping (Playwright tự chạy setup dependency)
           case "$SUITE" in
-            neko-api)     PROJECTS="--project=neko-setup --project=neko-api" ;;
-            neko-ui)      PROJECTS="--project=neko-setup --project=neko-ui" ;;
-            cms-desktop)  PROJECTS="--project=cms-setup --project=cms-desktop" ;;
-            cms-mobile)   PROJECTS="--project=cms-setup --project=cms-mobile" ;;
-            *)            PROJECTS="--project=neko-setup --project=neko-api" ;;
+            neko-api)     PROJECTS="--project=neko-api" ;;
+            neko-ui)      PROJECTS="--project=neko-ui" ;;
+            cms-desktop)  PROJECTS="--project=cms-desktop" ;;
+            cms-mobile)   PROJECTS="--project=cms-mobile" ;;
+            *)            PROJECTS="--project=neko-api" ;;
           esac
 
           # Build command
