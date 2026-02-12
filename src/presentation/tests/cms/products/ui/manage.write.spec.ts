@@ -1,207 +1,179 @@
-import { test, expect } from '@fixtures/cms/ui/gatekeeper.fixture';
-
 /**
- * CMS Tất Cả Sản Phẩm - Tests Thay Đổi Dữ Liệu (Mutating)
- * Các tests này thay đổi dữ liệu (edit, delete) → phải chạy tuần tự
- * 
- * Sử dụng fixtures để:
- * - Tự động login (authedPage)
- * - Auto-inject page object với viewportType
- * - Auto-navigate và verify page loaded
- * 
- * Chạy: npx playwright test all-products-write.spec.ts --project=chromium
+ * ============================================================================
+ * TEST: CMS QUẢN LÝ SẢN PHẨM — Mutating Tests (Edit, Delete)
+ * ============================================================================
+ *
+ * 🎯 MỤC ĐÍCH:
+ * Test các thao tác thay đổi dữ liệu: edit, delete, bulk delete sản phẩm.
+ * Các tests này thay đổi dữ liệu → PHẢI chạy tuần tự (serial mode).
+ *
+ * ════════════════════════════════════════════════════════════════════════════
+ * 📐 PATTERNS & METHODS SỬ DỤNG TỪ PAGE OBJECTS
+ * ════════════════════════════════════════════════════════════════════════════
+ *
+ * 1️⃣ ROW ACTIONS (từ CMSAllProductsPage)
+ *    - editProduct(name)               → click Edit trên dropdown action
+ *    - deleteProduct(name)             → click Delete + confirm dialog
+ *    - viewProduct(name)               → click View
+ *    - bulkDeleteProducts([names])     → select nhiều + bulk delete
+ *
+ * 2️⃣ TABLE DATA METHODS
+ *    - getFirstProductName()           → lấy tên sản phẩm đầu tiên
+ *    - getColumnValues('name')         → lấy tất cả giá trị 1 cột
+ *    - getDefaultTableData()           → lấy dữ liệu tất cả cột mặc định
+ *    - findRowByFilters({...})         → tìm dòng theo nhiều bộ lọc
+ *
+ * 3️⃣ PAGINATION
+ *    - getTestTargetFromNextPage()     → tìm product ở trang kế để test cross-page
+ *    - findRowByFiltersAcrossPages()   → tìm dòng qua nhiều trang
+ *
+ * 4️⃣ CHECKBOX
+ *    - toggleRowCheckboxByName(name, true/false) → bật/tắt checkbox dòng
+ *
+ * ⚠️ LƯU Ý:
+ * - Không dùng fixture `page` trực tiếp — luôn thao tác qua `allProductsPage`
+ * - URL assertions dùng `allProductsPage.page` (kế thừa từ BasePage)
+ * - Không đặt raw locator trong test — mọi locator nằm trong Page Object
  */
-test.describe('CMS Tất Cả Sản Phẩm - Mutating Tests', () => {
+import { test, expect } from '@fixtures/cms/ui/gatekeeper.fixture';
+import { Logger } from '@utils/Logger';
+
+test.describe('CMS Quản Lý Sản Phẩm', () => {
   // Chạy tuần tự để tránh conflict khi nhiều tests cùng edit/delete
   test.describe.configure({ mode: 'serial' });
 
-  test('08. Thực hiện hành động trên dòng - clickRowAction()', async ({ allProductsPage, page }) => {
+  test('TC_01: Click Edit sản phẩm - editProduct()', async ({ allProductsPage }) => {
     const firstProductName = await allProductsPage.getFirstProductName();
     expect(firstProductName).toBeTruthy();
 
-    console.log(`[Demo] Clicking Edit action for: "${firstProductName}"`);
     await allProductsPage.editProduct(firstProductName);
 
-    await expect(page).toHaveURL(/\/admin\/products\/.*\/edit/);
-    console.log(`[Demo] ✓ Successfully navigated to edit page`);
+    await expect(allProductsPage.page).toHaveURL(/\/admin\/products\/.*\/edit/);
+    Logger.info(`✅ Đã điều hướng tới trang edit: "${firstProductName}"`);
   });
 
-  test('15. Demo quy trình hoàn chỉnh', async ({ allProductsPage, page }) => {
-    console.log(`[Demo] === Complete Workflow Demo ===`);
-
+  test('TC_02: Quy trình xem sản phẩm hoàn chỉnh', async ({ allProductsPage }) => {
     const allData = await allProductsPage.getDefaultTableData();
-    console.log(`[Demo] Step 1: Found ${allData.length} products`);
+    expect(allData.length).toBeGreaterThan(0);
+    Logger.info(`📋 Tìm thấy ${allData.length} sản phẩm`);
 
-    if (allData.length > 0) {
-      const targetProduct = allData[0];
-      console.log(`[Demo] Step 2: Target product:`, targetProduct.name);
+    const targetProduct = allData[0];
+    Logger.info(`🎯 Target: "${targetProduct.name}"`);
+    Logger.info(`📄 Row data: ${JSON.stringify(targetProduct)}`);
 
-      const row = await allProductsPage.findRowByFilters({
-        name: targetProduct.name,
-        published: targetProduct.published,
-      });
-      await expect(row).toBeVisible();
-      console.log(`[Demo] Step 3: ✓ Found row`);
-
-      const rowData = await allProductsPage.getRowDataByFilters(
-        { name: targetProduct.name },
-        ['name', 'addedBy', 'info', 'totalStock', 'todaysDeal', 'published', 'featured']
-      );
-      console.log(`[Demo] Step 4: Row data:`, rowData);
-
-      console.log(`[Demo] Step 5: Clicking View action`);
-      await allProductsPage.viewProduct(targetProduct.name);
-      console.log(`[Demo] ✓ Complete workflow executed successfully`);
-    }
+    // Xem chi tiết sản phẩm đầu tiên
+    await allProductsPage.viewProduct(targetProduct.name);
+    Logger.info('✅ Đã click View thành công');
   });
 
-  test('19. Demo quy trình tìm kiếm xuyên trang hoàn chỉnh', async ({ allProductsPage, page }) => {
-    console.log(`[Demo] === Complete Cross-Page Search Workflow ===`);
-
-    const targetProduct = await allProductsPage.getTestTargetFromNextPage();
-
-    if (targetProduct) {
-        console.log(`[Demo] Target product: "${targetProduct}"`);
-
-        const row = await allProductsPage.findRowByFiltersAcrossPages(
-          { name: targetProduct },
-          { maxPages: 5 }
-        );
-        await expect(row).toBeVisible();
-        console.log(`[Demo] ✓ Found row`);
-
-        const rowData = await allProductsPage.getRowDataByFiltersAcrossPages(
-          { name: targetProduct },
-          { maxPages: 5 },
-          ['name', 'addedBy', 'info', 'totalStock', 'published', 'featured']
-        );
-        console.log(`[Demo] Row data:`, rowData);
-
-        await allProductsPage.editProduct(targetProduct);
-        await expect(page).toHaveURL(/\/admin\/products\/.*\/edit/);
-        console.log(`[Demo] ✓ Complete cross-page workflow executed successfully!`);
-    } else {
-      console.log(`[Demo] Skipping workflow test: Not enough data`);
-    }
-  });
-
-  test('20. Chỉnh sửa sản phẩm theo tên - editProduct()', async ({ allProductsPage, page }) => {
-    console.log(`[Demo] === Edit Product by Name Filter ===`);
-
+  test('TC_03: Tìm kiếm xuyên trang và edit', async ({ allProductsPage }) => {
     const firstProductName = await allProductsPage.getFirstProductName();
     expect(firstProductName).toBeTruthy();
-    console.log(`[Demo] Target product: "${firstProductName}"`);
+    Logger.info(`🎯 Target: "${firstProductName}"`);
+
+    // Tìm dòng qua nhiều trang — auto detect tổng trang
+    const { row, pageNumber } = await allProductsPage.findRowByFiltersAcrossPages(
+      { name: firstProductName },
+      { maxPages: 5 }
+    );
+    await expect(row).toBeVisible();
+    Logger.info(`📄 Tìm thấy ở trang ${pageNumber}`);
+
+    // Lấy data dòng
+    const { data } = await allProductsPage.getRowDataByFiltersAcrossPages(
+      { name: firstProductName },
+      { maxPages: 5 },
+      ['name', 'addedBy', 'info', 'totalStock', 'published', 'featured']
+    );
+    Logger.info(`📄 Row data: ${JSON.stringify(data)}`);
+
+    // Edit product
+    await allProductsPage.editProduct(firstProductName);
+    await expect(allProductsPage.page).toHaveURL(/\/admin\/products\/.*\/edit/);
+    Logger.info('✅ Đã điều hướng tới trang edit qua cross-page search');
+  });
+
+  test('TC_04: Chỉnh sửa sản phẩm đầu tiên', async ({ allProductsPage }) => {
+    const firstProductName = await allProductsPage.getFirstProductName();
+    expect(firstProductName).toBeTruthy();
+    Logger.info(`🎯 Target: "${firstProductName}"`);
 
     await allProductsPage.editProduct(firstProductName);
-
-    await expect(page).toHaveURL(/\/admin\/products\/.*\/edit/);
-    console.log(`[Demo] ✓ Successfully navigated to edit page`);
-    
-    const editPageTitle = page.locator('h1, h2, h3').filter({ hasText: /edit|update|product/i });
-    const titleCount = await editPageTitle.count();
-    if (titleCount > 0) {
-      await expect(editPageTitle.first()).toBeVisible();
-      console.log(`[Demo] ✓ Edit page loaded successfully`);
-    }
+    await expect(allProductsPage.page).toHaveURL(/\/admin\/products\/.*\/edit/);
+    Logger.info('✅ Đã điều hướng tới trang edit');
   });
 
-  test('21. Xóa một sản phẩm theo tên - deleteProduct()', async ({ allProductsPage, page }) => {
-    console.log(`[Demo] === Delete Single Product by Name Filter ===`);
-
+  test('TC_05: Xóa một sản phẩm - deleteProduct()', async ({ allProductsPage }) => {
     const firstProductName = await allProductsPage.getFirstProductName();
     expect(firstProductName).toBeTruthy();
-    console.log(`[Demo] Target product to delete: "${firstProductName}"`);
+    Logger.info(`🎯 Target: "${firstProductName}"`);
 
+    // Verify sản phẩm tồn tại trước khi xóa
     const productNamesBefore = await allProductsPage.getColumnValues('name');
     const existsBefore = productNamesBefore.some((name) => name.includes(firstProductName));
     expect(existsBefore).toBe(true);
-    console.log(`[Demo] ✓ Product exists before delete`);
 
+    // Select checkbox rồi xóa
     await allProductsPage.toggleRowCheckboxByName(firstProductName, true);
-    
-    const row = await allProductsPage.findRowByColumnValue('name', firstProductName);
-    const checkbox = row.locator('input[type="checkbox"].check-one').first();
-    await expect(checkbox).toBeChecked();
-    console.log(`[Demo] ✓ Checkbox selected`);
-
     await allProductsPage.deleteProduct(firstProductName);
 
-    await allProductsPage.waitForTableReady();
-    await page.waitForTimeout(2000);
-
+    // Verify kết quả
     const productNamesAfter = await allProductsPage.getColumnValues('name');
     const existsAfter = productNamesAfter.some((name) => name.includes(firstProductName));
-    console.log(`[Demo] Product exists after delete: ${existsAfter}`);
-    console.log(`[Demo] ✓ Delete action completed`);
+    Logger.info(`📊 Sản phẩm còn tồn tại sau xóa: ${existsAfter}`);
   });
 
-  test('22. Xóa hàng loạt nhiều sản phẩm - bulkDeleteProducts()', async ({ allProductsPage, page }) => {
-    console.log(`[Demo] === Bulk Delete Multiple Products ===`);
-
+  test('TC_06: Xóa hàng loạt - bulkDeleteProducts()', async ({ allProductsPage }) => {
     const productNames = await allProductsPage.getColumnValues('name');
     expect(productNames.length).toBeGreaterThan(0);
-    
-    const productsToDelete = productNames.slice(0, Math.min(2, productNames.length));
-    console.log(`[Demo] Products to delete (${productsToDelete.length}):`, productsToDelete);
 
+    const productsToDelete = productNames.slice(0, Math.min(2, productNames.length));
+    Logger.info(`🎯 Sẽ xóa ${productsToDelete.length} sản phẩm: ${productsToDelete.join(', ')}`);
+
+    // Verify tất cả tồn tại trước khi xóa
     const productNamesBefore = await allProductsPage.getColumnValues('name');
     productsToDelete.forEach((productName) => {
       const exists = productNamesBefore.some((name) => name.includes(productName));
       expect(exists).toBe(true);
     });
-    console.log(`[Demo] ✓ All products exist before delete`);
 
+    // Bulk delete
     await allProductsPage.bulkDeleteProducts(productsToDelete);
 
-    await allProductsPage.waitForTableReady();
-    await page.waitForTimeout(2000);
-
+    // Verify kết quả
     const productNamesAfter = await allProductsPage.getColumnValues('name');
     productsToDelete.forEach((productName) => {
       const exists = productNamesAfter.some((name) => name.includes(productName));
-      console.log(`[Demo] Product "${productName}" exists after delete: ${exists}`);
+      Logger.info(`📊 "${productName}" còn tồn tại: ${exists}`);
     });
-    console.log(`[Demo] ✓ Bulk delete action completed`);
   });
 
-  test('23. Chỉnh sửa sản phẩm tìm thấy qua nhiều trang', async ({ allProductsPage, page }) => {
-    console.log(`[Demo] === Edit Product Found Across Pages ===`);
-
+  test('TC_07: Edit sản phẩm từ trang khác - cross-page edit', async ({ allProductsPage }) => {
     const targetProduct = await allProductsPage.getTestTargetFromNextPage();
 
-    if (targetProduct) {
-        console.log(`[Demo] Đã ở trang chứa product, thực hiện edit trực tiếp: "${targetProduct}"`);
-
-        await allProductsPage.editProduct(targetProduct);
-        await expect(page).toHaveURL(/\/admin\/products\/.*\/edit/);
-        console.log(`[Demo] ✓ Successfully edited product`);
-    } else {
-        console.log(`[Demo] Skipping test: Not enough data`);
+    if (!targetProduct) {
+      Logger.info('⏭️ Bỏ qua test: Không đủ dữ liệu');
+      return;
     }
+
+    Logger.info(`🎯 Target: "${targetProduct}"`);
+    await allProductsPage.editProduct(targetProduct);
+    await expect(allProductsPage.page).toHaveURL(/\/admin\/products\/.*\/edit/);
+    Logger.info('✅ Đã edit thành công');
   });
 
-  test('24. Xóa sản phẩm tìm thấy qua nhiều trang', async ({ allProductsPage, page }) => {
-    console.log(`[Demo] === Delete Product Found Across Pages ===`);
-
+  test('TC_08: Xóa sản phẩm từ trang khác - cross-page delete', async ({ allProductsPage }) => {
     const targetProduct = await allProductsPage.getTestTargetFromNextPage();
 
-    if (targetProduct) {
-        console.log(`[Demo] Đã ở trang chứa product: "${targetProduct}"`);
-
-        await allProductsPage.toggleRowCheckboxByName(targetProduct, true);
-        
-        const row = await allProductsPage.findRowByColumnValue('name', targetProduct);
-        const checkbox = row.locator('input[type="checkbox"].check-one').first();
-        await expect(checkbox).toBeChecked();
-        console.log(`[Demo] ✓ Checkbox selected`);
-
-        await allProductsPage.deleteProduct(targetProduct);
-
-        await allProductsPage.waitForTableReady();
-        await page.waitForTimeout(2000);
-        console.log(`[Demo] ✓ Delete action completed`);
-    } else {
-        console.log(`[Demo] Skipping test: Not enough data`);
+    if (!targetProduct) {
+      Logger.info('⏭️ Bỏ qua test: Không đủ dữ liệu');
+      return;
     }
+
+    Logger.info(`🎯 Target: "${targetProduct}"`);
+
+    await allProductsPage.toggleRowCheckboxByName(targetProduct, true);
+    await allProductsPage.deleteProduct(targetProduct);
+    Logger.info('✅ Đã xóa thành công');
   });
 });

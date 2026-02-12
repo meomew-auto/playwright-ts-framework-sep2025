@@ -217,7 +217,7 @@ test.describe('CMS Tất Cả Sản Phẩm - Mobile Tests', () => {
     const targetProduct = await allProductsPage.getTestTargetFromNextPage();
     
     if (targetProduct) {
-      const row = await allProductsPage.findRowByFiltersAcrossPages(
+      const { row } = await allProductsPage.findRowByFiltersAcrossPages(
         { name: targetProduct },
         { maxPages: 5 }
       );
@@ -232,7 +232,7 @@ test.describe('CMS Tất Cả Sản Phẩm - Mobile Tests', () => {
     
     if (targetProduct) {
       // Tìm row qua nhiều trang
-      const row = await allProductsPage.findRowByFiltersAcrossPages(
+      const { row } = await allProductsPage.findRowByFiltersAcrossPages(
         { name: targetProduct },
         { maxPages: 5 }
       );
@@ -262,7 +262,7 @@ test.describe('CMS Tất Cả Sản Phẩm - Mobile Tests', () => {
       
       if (!foundInPage1) {
         await allProductsPage.clearSearch();
-        const row = await allProductsPage.findRowByFiltersAcrossPages(
+        const { row } = await allProductsPage.findRowByFiltersAcrossPages(
           { name: targetProduct },
           { maxPages: 5 }
         );

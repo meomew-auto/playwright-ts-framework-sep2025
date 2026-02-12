@@ -82,13 +82,15 @@ export const appFixtures = {
   },
 
   /**
-   * Add New Product page — form tạo sản phẩm mới (KHÔNG navigate tự động).
+   * Add New Product page — form tạo sản phẩm mới, navigate + verify tự động.
    */
   addNewProductPage: async (
     { authedPage, viewportType }: AppDeps,
     use: (r: CMSAddNewProductPage) => Promise<void>
   ) => {
     const addNewProductPage = new CMSAddNewProductPage(authedPage, viewportType || 'desktop');
+    await addNewProductPage.goto();
+    await addNewProductPage.expectOnPage();
     Logger.info('AddNewProductPage ready', { context: 'fixture' });
     await use(addNewProductPage);
   },

@@ -8,15 +8,60 @@
  * Product Info, Images, Video, Price, Stock, SEO, Settings, Shipping.
  * URL: /admin/products/create
  *
- * 📌 KEY PATTERNS:
- * - Reusable dynamic locators: formGroup, aizSwitchLabel, radioLabel
- * - Upload modal: gallery images, thumbnail
- * - Bootstrap select dropdowns: category, brand, unit
- * - Tagify inputs: tags
+ * ════════════════════════════════════════════════════════════════════════════
+ * 📐 PATTERN: SECTION DELEGATION
+ * ════════════════════════════════════════════════════════════════════════════
  *
- * ⚠️ LƯU Ý:
- * File này rất lớn (1170+ lines) vì form CMS có nhiều sections.
- * Locators được tổ chức theo sections giống UI form.
+ * Form "Add New Product" có ~50+ fields chia thành 7 tabs.
+ * Nếu viết tất cả methods phẳng trong 1 class → file sẽ chaos, khó maintain.
+ *
+ * GIẢI PHÁP: Chia thành 3 tầng:
+ *
+ * ```
+ * CMSAddNewProductPage
+ * ├── 1️⃣ Locators (pageLocators)         ← Định nghĩa tất cả selectors
+ * ├── 2️⃣ Sections (createSections())     ← Logic chia theo tab/nhóm
+ * │   ├── general      (info + description + status + flashDeal + tax)
+ * │   ├── filesAndMedia (images + videos + pdf)
+ * │   ├── priceAndStock (pricing + variations + stock)
+ * │   ├── seo
+ * │   ├── shipping
+ * │   ├── warranty
+ * │   └── frequentlyBought
+ * └── 3️⃣ Facade methods                  ← Shortcut 1-liner delegate xuống sections
+ * ```
+ *
+ * TẠI SAO DÙNG PATTERN NÀY?
+ * ┌──────────────────┬──────────────────────────────────────────────────┐
+ * │ Tab auto-switch  │ Mỗi section tự gọi ensureTab() — test không    │
+ * │                  │ cần biết field nằm ở tab nào                    │
+ * ├──────────────────┼──────────────────────────────────────────────────┤
+ * │ Bulk fill        │ sections.general.fill({ name, category, unit }) │
+ * │                  │ — điền nhiều field 1 lần                        │
+ * ├──────────────────┼──────────────────────────────────────────────────┤
+ * │ Granular         │ sections.priceAndStock.fillUnitPrice(100)       │
+ * │                  │ — điền từng field khi cần                       │
+ * ├──────────────────┼──────────────────────────────────────────────────┤
+ * │ Tổ chức rõ       │ Code chia theo UI tabs, dễ tìm                 │
+ * ├──────────────────┼──────────────────────────────────────────────────┤
+ * │ 2 cách gọi       │ addNewProductPage.fillUnitPrice()               │
+ * │                  │ hoặc addNewProductPage.sections.priceAndStock    │
+ * │                  │ .fillUnitPrice()                                │
+ * └──────────────────┴──────────────────────────────────────────────────┘
+ *
+ * VÍ DỤ SỬ DỤNG TRONG TEST:
+ * ```typescript
+ * // Cách 1: Bulk fill theo section (khuyên dùng)
+ * await addNewProductPage.sections.general.fill({
+ *   name: 'Product A', category: null, unit: 'Pc', minQty: 1,
+ * });
+ * await addNewProductPage.sections.priceAndStock.fill({
+ *   unitPrice: 100, quantity: 10,
+ * });
+ *
+ * // Cách 2: Facade shortcut (nếu chỉ cần 1 field)
+ * await addNewProductPage.fillUnitPrice(100);
+ * ```
  *
  * 🔗 LIÊN KẾT:
  * - Dùng: ProductInfo model (models/cms/Product.ts)
@@ -335,7 +380,22 @@ export class CMSAddNewProductPage extends BasePage {
     await this.sections.priceAndStock.fillQuantity(data.quantity);
   }
 
-  // ========== Public Facade Methods (delegate to sections - không duplicate logic) ==========
+  // ═══════════════════════════════════════════════════════════════════════════
+  // TẦNG 3: PUBLIC FACADE METHODS
+  // ═══════════════════════════════════════════════════════════════════════════
+  //
+  // Mỗi method ở đây chỉ là 1-liner delegate xuống sections.
+  // KHÔNG có logic riêng — tránh duplicate code.
+  //
+  // MỤC ĐÍCH: Cho phép test gọi ngắn gọn:
+  //   await addNewProductPage.fillUnitPrice(100);
+  // thay vì phải viết dài:
+  //   await addNewProductPage.sections.priceAndStock.fillUnitPrice(100);
+  //
+  // LƯU Ý: Nếu test cần fill nhiều fields cùng lúc, dùng sections.xxx.fill()
+  // sẽ gọn hơn là gọi từng facade method.
+  // ═══════════════════════════════════════════════════════════════════════════
+
   // General Tab
   async fillProductName(name: string) { return this.sections.general.fillProductName(name); }
   async selectFirstCategory() { return this.sections.general.selectFirstCategory(); }
@@ -401,12 +461,39 @@ export class CMSAddNewProductPage extends BasePage {
   async selectFrequentlyBoughtSelectionType(type: 'product' | 'category') { return this.sections.frequentlyBought.selectSelectionType(type); }
   async selectFrequentlyBoughtCategory(categoryText: string) { return this.sections.frequentlyBought.selectCategory(categoryText); }
 
-  // ========== Section factories ==========
+  // ═══════════════════════════════════════════════════════════════════════════
+  // TẦNG 2: SECTION FACTORY
+  // ═══════════════════════════════════════════════════════════════════════════
+  //
+  // createSections() tạo ra các section objects để nhóm methods theo tab UI.
+  //
+  // FLOW XỬ LÝ:
+  // 1. Tạo small method objects (infoMethods, pricing, stock, status, ...)
+  //    → Mỗi object chứa các method đơn lẻ cho 1 nhóm fields
+  //    → Mỗi method tự gọi ensureTab() để switch tab nếu cần
+  //
+  // 2. Wrap thêm bulk fill(): info = { ...infoMethods, fill: async (data) => {...} }
+  //    → fill() nhận 1 object với nhiều fields, chỉ điền fields có giá trị
+  //    → Giúp test code ngắn gọn hơn
+  //
+  // 3. Gộp thành tab-level objects (general, priceAndStock, filesAndMedia, ...)
+  //    → Mỗi tab object spread nhiều small objects lại
+  //    → Có fill() riêng delegate xuống các sub-section fill()
+  //
+  // 4. Return tất cả tab objects → this.sections
+  //
+  // ═══════════════════════════════════════════════════════════════════════════
   private createSections() {
-    // Lưu reference đến this để sections có thể access trực tiếp
-    const self = this;
 
-    // Helper: bảo đảm tab đang active trước khi thao tác
+    // ─── HELPER: AUTO TAB SWITCHING ─────────────────────────────────────
+    // Mọi field method đều gọi ensureTab() đầu tiên.
+    // → Test KHÔNG CẦN biết field nằm ở tab nào.
+    // → Nếu tab chưa active, tự click để switch.
+    // → Nếu tab đã active, skip (không click thừa).
+    //
+    // Ví dụ: fillUnitPrice() gọi ensureTab('price_and_stocks')
+    //   → Playwright tự click vào tab "Price & Stock" nếu đang ở tab khác.
+    // ────────────────────────────────────────────────────────────────────────
     const ensureTab = async (
       tab:
         | 'general'
@@ -418,31 +505,40 @@ export class CMSAddNewProductPage extends BasePage {
         | 'frequenty_bought_product'
     ) => {
       const tabMap = {
-        general: self.element('tabGeneral'),
-        files_and_media: self.element('tabFilesMedia'),
-        price_and_stocks: self.element('tabPriceStock'),
-        seo: self.element('tabSEO'),
-        shipping: self.element('tabShipping'),
-        warranty: self.element('tabWarranty'),
-        frequenty_bought_product: self.element('tabFrequentlyBought'),
+        general: this.element('tabGeneral'),
+        files_and_media: this.element('tabFilesMedia'),
+        price_and_stocks: this.element('tabPriceStock'),
+        seo: this.element('tabSEO'),
+        shipping: this.element('tabShipping'),
+        warranty: this.element('tabWarranty'),
+        frequenty_bought_product: this.element('tabFrequentlyBought'),
       } as const;
 
       const tabLocator = tabMap[tab];
       const selected = await tabLocator.getAttribute('aria-selected');
       if (selected !== 'true') {
-        await self.clickWithLog(tabLocator);
+        await this.clickWithLog(tabLocator);
       }
     };
 
-    // Product Information Section
+    // ─── BƯỚC 1: SMALL METHOD OBJECTS ───────────────────────────────────
+    // Tạo object chứa các method đơn lẻ cho từng nhóm fields.
+    // Mỗi method:
+    //   1. Gọi ensureTab() → đảm bảo đúng tab
+    //   2. Thao tác với element (fill, click, select)
+    //
+    // VÍ DỤ: infoMethods.fillProductName('iPhone 15')
+    //   1. ensureTab('general')     → switch sang tab General nếu cần
+    //   2. fillWithLog(input, name) → điền text + log
+    // ────────────────────────────────────────────────────────────────────────
     const infoMethods = {
       fillProductName: async (name: string) => {
         await ensureTab('general');
-        await self.fillWithLog(self.element('productNameInput'), name);
+        await this.fillWithLog(this.element('productNameInput'), name);
       },
       selectFirstCategory: async () => {
         await ensureTab('general');
-        const firstRadio = self.page.locator('input[name="category_id"]').first();
+        const firstRadio = this.page.locator('input[name="category_id"]').first();
         await expect(firstRadio).toBeVisible();
         await firstRadio.scrollIntoViewIfNeeded();
         if (!(await firstRadio.isChecked())) {
@@ -453,10 +549,10 @@ export class CMSAddNewProductPage extends BasePage {
         await ensureTab('general');
         // Tìm label chứa text category, sau đó tìm radio button ngay sau label đó
         // Cấu trúc: <label><input checkbox> Category Name</label><input radio>
-        const categoryLabel = self.page
+        const categoryLabel = this.page
           .locator('label')
           .filter({ hasText: new RegExp(text, 'i') })
-          .filter({ has: self.page.locator('input[name="category_ids[]"]') })
+          .filter({ has: this.page.locator('input[name="category_ids[]"]') })
           .first();
         
         await expect(categoryLabel).toBeVisible();
@@ -472,7 +568,7 @@ export class CMSAddNewProductPage extends BasePage {
       },
       selectFirstBrand: async () => {
         await ensureTab('general');
-        const selectElement = self.page.locator('select#brand_id');
+        const selectElement = this.page.locator('select#brand_id');
         const options = selectElement.locator('option:not([value=""])');
         if (await options.count()) {
           const value = await options.first().getAttribute('value');
@@ -482,33 +578,33 @@ export class CMSAddNewProductPage extends BasePage {
             return;
           }
         }
-        const selectButton = self.element('brandSelect');
+        const selectButton = this.element('brandSelect');
         await expect(selectButton).toBeVisible();
-        await self.clickWithLog(selectButton);
-        const firstOption = self.page.locator('#bs-select-2 .dropdown-item, #bs-select-2 li a').first();
+        await this.clickWithLog(selectButton);
+        const firstOption = this.page.locator('#bs-select-2 .dropdown-item, #bs-select-2 li a').first();
         await expect(firstOption).toBeVisible();
-        await self.clickWithLog(firstOption);
+        await this.clickWithLog(firstOption);
       },
       selectBrand: async (text: string) => {
         await ensureTab('general');
-        await self.helpers.selectBootstrapOption(self.element('brandSelect'), text);
+        await this.helpers.selectBootstrapOption(this.element('brandSelect'), text);
       },
       fillUnit: async (unit: string) => {
         await ensureTab('general');
-        await self.fillWithLog(self.element('unitInput'), unit);
+        await this.fillWithLog(this.element('unitInput'), unit);
       },
       fillWeight: async (weight: number) => {
         await ensureTab('general');
-        await self.fillWithLog(self.element('weightInput'), weight.toString());
+        await this.fillWithLog(this.element('weightInput'), weight.toString());
       },
       fillMinQty: async (qty: number) => {
         await ensureTab('general');
-        await self.fillWithLog(self.element('minQtyInput'), qty.toString());
+        await this.fillWithLog(this.element('minQtyInput'), qty.toString());
       },
       fillTags: async (tags: string[]) => {
         await ensureTab('general');
-        const tagifyElement = self.element('tagsTagify');
-        const tagifyInput = self.element('tagsTagifyInput');
+        const tagifyElement = this.element('tagsTagify');
+        const tagifyInput = this.element('tagsTagifyInput');
         await expect(tagifyElement).toBeVisible();
         await expect(tagifyInput).toBeVisible();
         for (const tag of tags) {
@@ -522,9 +618,23 @@ export class CMSAddNewProductPage extends BasePage {
       },
       fillBarcode: async (barcode: string) => {
         await ensureTab('general');
-        await self.fillWithLog(self.element('barcodeInput'), barcode);
+        await this.fillWithLog(this.element('barcodeInput'), barcode);
       },
     };
+    // ─── BƯỚC 2: WRAP THÊM BULK FILL ──────────────────────────────────
+    // Spread tất cả methods từ infoMethods + thêm fill() method.
+    // fill() nhận 1 object, chỉ điền fields có giá trị (skip undefined).
+    //
+    // VÍ DỤ:
+    //   info.fill({ name: 'iPhone', unit: 'Pc', minQty: 1 })
+    //   → Tự động gọi: fillProductName('iPhone'), fillUnit('Pc'), fillMinQty(1)
+    //   → Skip các fields không truyền (category, brand, weight, ...)
+    //
+    // null CÓ Ý NGHĨA RIÊNG cho category/brand:
+    //   category: null  → chọn category đầu tiên (selectFirstCategory)
+    //   category: 'PC'  → chọn category theo text (selectCategory)
+    //   category: undefined (không truyền) → skip, không làm gì
+    // ────────────────────────────────────────────────────────────────────────
     const info = {
       ...infoMethods,
       fill: async (data: {
@@ -558,19 +668,19 @@ export class CMSAddNewProductPage extends BasePage {
     const images = {
       uploadGalleryImages: async (fileIndex: number = 0) => {
         await ensureTab('files_and_media');
-        await self.selectImageFromModal(self.element('galleryImagesBrowse'), fileIndex);
+        await this.selectImageFromModal(this.element('galleryImagesBrowse'), fileIndex);
       },
       uploadGalleryImagesFromFile: async (filePath: string) => {
         await ensureTab('files_and_media');
-        await self.uploadNewImageFromModal(self.element('galleryImagesBrowse'), filePath);
+        await this.uploadNewImageFromModal(this.element('galleryImagesBrowse'), filePath);
       },
       uploadThumbnailImage: async (fileIndex: number = 0) => {
         await ensureTab('files_and_media');
-        await self.selectImageFromModal(self.element('thumbnailImageBrowse'), fileIndex);
+        await this.selectImageFromModal(this.element('thumbnailImageBrowse'), fileIndex);
       },
       uploadThumbnailImageFromFile: async (filePath: string) => {
         await ensureTab('files_and_media');
-        await self.uploadNewImageFromModal(self.element('thumbnailImageBrowse'), filePath);
+        await this.uploadNewImageFromModal(this.element('thumbnailImageBrowse'), filePath);
       },
     };
 
@@ -579,20 +689,20 @@ export class CMSAddNewProductPage extends BasePage {
       selectVideoProvider: async (provider: 'Youtube' | 'Dailymotion' | 'Vimeo') => {
         await ensureTab('files_and_media');
         // Video provider select không còn trong UI mới, skip nếu không tìm thấy
-        const videoProviderButton = self.element('videoProviderSelect');
+        const videoProviderButton = this.element('videoProviderSelect');
         const count = await videoProviderButton.count();
         if (count === 0) {
           console.log(`[Video Provider] Select không tồn tại trong UI mới, bỏ qua chọn provider "${provider}"`);
           return;
         }
-        await self.helpers.selectBootstrapOption(videoProviderButton, provider);
+        await this.helpers.selectBootstrapOption(videoProviderButton, provider);
       },
       fillVideoLink: async (link: string) => {
         await ensureTab('files_and_media');
         // Tìm input video_link đầu tiên
-        const videoLinkInput = self.page.locator('input[name="video_link[]"]').first();
+        const videoLinkInput = this.page.locator('input[name="video_link[]"]').first();
         await expect(videoLinkInput).toBeVisible();
-        await self.fillWithLog(videoLinkInput, link);
+        await this.fillWithLog(videoLinkInput, link);
       },
     };
     const videos = {
@@ -607,24 +717,24 @@ export class CMSAddNewProductPage extends BasePage {
     const variations = {
       toggleColorsActive: async (enabled: boolean) => {
         await ensureTab('price_and_stocks');
-        const checkbox = self.element('colorsActiveCheckbox');
+        const checkbox = this.element('colorsActiveCheckbox');
         const isChecked = await checkbox.isChecked();
         if (isChecked !== enabled) {
-          await self.element('colorsActiveLabel').click();
+          await this.element('colorsActiveLabel').click();
         }
       },
       selectColors: async (colorTexts: string[]) => {
-        return await self.executeWithLog(async () => {
+        return await this.executeWithLog(async () => {
           await ensureTab('price_and_stocks');
           
-          const colorsCheckbox = self.element('colorsActiveCheckbox');
+          const colorsCheckbox = this.element('colorsActiveCheckbox');
           const isEnabled = await colorsCheckbox.isChecked();
           
           if (!isEnabled) {
             throw new Error('Colors chưa được bật. Hãy gọi toggleColorsActive(true) trước.');
           }
           
-          const selectElement = self.page.locator('select[name="colors[]"]');
+          const selectElement = this.page.locator('select[name="colors[]"]');
           const selectCount = await selectElement.count();
           
           if (selectCount > 0) {
@@ -653,15 +763,15 @@ export class CMSAddNewProductPage extends BasePage {
           }
           
           // Sử dụng helper cho multiple select
-          const selectButton = self.element('colorsSelect');
-          await self.helpers.selectBootstrapOptions(selectButton, colorTexts);
+          const selectButton = this.element('colorsSelect');
+          await this.helpers.selectBootstrapOptions(selectButton, colorTexts);
         }, `[selectColors] Chọn colors: ${colorTexts.join(', ')}`);
       },
       selectAttributes: async (attributeTexts: string[]) => {
-        return await self.executeWithLog(async () => {
+        return await this.executeWithLog(async () => {
           await ensureTab('price_and_stocks');
           
-          const selectElement = self.page.locator('select[name="choice_attributes[]"]');
+          const selectElement = this.page.locator('select[name="choice_attributes[]"]');
           const selectCount = await selectElement.count();
           
           if (selectCount > 0) {
@@ -690,8 +800,8 @@ export class CMSAddNewProductPage extends BasePage {
           }
           
           // Sử dụng helper cho multiple select
-          const selectButton = self.element('attributesSelect');
-          await self.helpers.selectBootstrapOptions(selectButton, attributeTexts);
+          const selectButton = this.element('attributesSelect');
+          await this.helpers.selectBootstrapOptions(selectButton, attributeTexts);
         }, `[selectAttributes] Chọn attributes: ${attributeTexts.join(', ')}`);
       },
       fill: async (data: { colorsActive?: boolean; colors?: string[]; attributes?: string[] }) => {
@@ -705,36 +815,36 @@ export class CMSAddNewProductPage extends BasePage {
     const pricing = {
       fillUnitPrice: async (price: number) => {
         await ensureTab('price_and_stocks');
-        await self.fillWithLog(self.element('unitPriceInput'), price.toString());
+        await this.fillWithLog(this.element('unitPriceInput'), price.toString());
       },
       fillDiscountDateRange: async (startDate: string, endDate: string) => {
         await ensureTab('price_and_stocks');
         const dateRange = `${startDate} to ${endDate}`;
-        await self.fillWithLog(self.element('discountDateRangeInput'), dateRange);
+        await this.fillWithLog(this.element('discountDateRangeInput'), dateRange);
       },
       fillDiscount: async (discount: number) => {
         await ensureTab('price_and_stocks');
-        await self.fillWithLog(self.element('discountInput'), discount.toString());
+        await this.fillWithLog(this.element('discountInput'), discount.toString());
       },
       selectDiscountType: async (type: 'Flat' | 'Percent') => {
         await ensureTab('price_and_stocks');
-        await self.helpers.selectBootstrapOption(self.element('discountTypeSelect'), type);
+        await this.helpers.selectBootstrapOption(this.element('discountTypeSelect'), type);
       },
       fillQuantity: async (qty: number) => {
         await ensureTab('price_and_stocks');
-        await self.fillWithLog(self.element('quantityInput'), qty.toString());
+        await this.fillWithLog(this.element('quantityInput'), qty.toString());
       },
       fillSKU: async (sku: string) => {
         await ensureTab('price_and_stocks');
-        await self.fillWithLog(self.element('skuInput'), sku);
+        await this.fillWithLog(this.element('skuInput'), sku);
       },
       fillExternalLink: async (link: string) => {
         await ensureTab('price_and_stocks');
-        await self.fillWithLog(self.element('externalLinkInput'), link);
+        await this.fillWithLog(this.element('externalLinkInput'), link);
       },
       fillExternalLinkBtn: async (text: string) => {
         await ensureTab('price_and_stocks');
-        await self.fillWithLog(self.element('externalLinkBtnInput'), text);
+        await this.fillWithLog(this.element('externalLinkBtnInput'), text);
       },
       fill: async (data: {
         unitPrice?: number;
@@ -761,7 +871,7 @@ export class CMSAddNewProductPage extends BasePage {
     const description = {
       fillDescription: async (description: string) => {
         await ensureTab('general');
-        await self.element('descriptionEditor').fill(description);
+        await this.element('descriptionEditor').fill(description);
       },
     };
 
@@ -769,7 +879,7 @@ export class CMSAddNewProductPage extends BasePage {
     const pdf = {
       uploadPDF: async (filePath: string) => {
         await ensureTab('files_and_media');
-        const fileInput = self.page.locator('div[data-toggle="aizuploader"][data-type="document"] input[type="file"]');
+        const fileInput = this.page.locator('div[data-toggle="aizuploader"][data-type="document"] input[type="file"]');
         await fileInput.setInputFiles(filePath);
       },
     };
@@ -778,15 +888,15 @@ export class CMSAddNewProductPage extends BasePage {
     const seoMethods = {
       fillMetaTitle: async (title: string) => {
         await ensureTab('seo');
-        await self.fillWithLog(self.element('metaTitleInput'), title);
+        await this.fillWithLog(this.element('metaTitleInput'), title);
       },
       fillMetaDescription: async (description: string) => {
         await ensureTab('seo');
-        await self.fillWithLog(self.element('metaDescriptionTextarea'), description);
+        await this.fillWithLog(this.element('metaDescriptionTextarea'), description);
       },
       uploadMetaImage: async (filePath: string) => {
         await ensureTab('seo');
-        const fileInput = self.page.locator('div[data-toggle="aizuploader"][data-type="image"]').nth(2).locator('input[type="file"]');
+        const fileInput = this.page.locator('div[data-toggle="aizuploader"][data-type="image"]').nth(2).locator('input[type="file"]');
         await fileInput.setInputFiles(filePath);
       },
     };
@@ -803,20 +913,20 @@ export class CMSAddNewProductPage extends BasePage {
     const stock = {
       fillLowStockQuantity: async (qty: number) => {
         await ensureTab('price_and_stocks');
-        await self.fillWithLog(self.element('lowStockQuantityInput'), qty.toString());
+        await this.fillWithLog(this.element('lowStockQuantityInput'), qty.toString());
       },
       selectStockVisibility: async (state: 'quantity' | 'text' | 'hide') => {
         await ensureTab('price_and_stocks');
         const radioMap = {
-          quantity: self.element('stockVisibilityQuantityRadio'),
-          text: self.element('stockVisibilityTextRadio'),
-          hide: self.element('stockVisibilityHideRadio'),
+          quantity: this.element('stockVisibilityQuantityRadio'),
+          text: this.element('stockVisibilityTextRadio'),
+          hide: this.element('stockVisibilityHideRadio'),
         };
         
         const labelMap = {
-          quantity: self.element('stockVisibilityQuantityLabel'),
-          text: self.element('stockVisibilityTextLabel'),
-          hide: self.element('stockVisibilityHideLabel'),
+          quantity: this.element('stockVisibilityQuantityLabel'),
+          text: this.element('stockVisibilityTextLabel'),
+          hide: this.element('stockVisibilityHideLabel'),
         };
         
         const targetRadio = radioMap[state];
@@ -826,7 +936,7 @@ export class CMSAddNewProductPage extends BasePage {
         
         if (!isChecked) {
           await targetLabel.scrollIntoViewIfNeeded();
-          await self.clickWithLog(targetLabel);
+          await this.clickWithLog(targetLabel);
         } else {
           console.log(`[Stock Visibility] Radio "${state}" đã được chọn, bỏ qua click.`);
         }
@@ -844,18 +954,18 @@ export class CMSAddNewProductPage extends BasePage {
     const status = {
       toggleFeatured: async (enabled: boolean) => {
         await ensureTab('general');
-        const checkbox = self.element('featuredCheckbox');
+        const checkbox = this.element('featuredCheckbox');
         const isChecked = await checkbox.isChecked();
         if (isChecked !== enabled) {
-          await self.element('featuredLabel').click();
+          await this.element('featuredLabel').click();
         }
       },
       toggleTodaysDeal: async (enabled: boolean) => {
         await ensureTab('general');
-        const checkbox = self.element('todaysDealCheckbox');
+        const checkbox = this.element('todaysDealCheckbox');
         const isChecked = await checkbox.isChecked();
         if (isChecked !== enabled) {
-          await self.element('todaysDealLabel').click();
+          await this.element('todaysDealLabel').click();
         }
       },
       fill: async (data: {
@@ -871,15 +981,15 @@ export class CMSAddNewProductPage extends BasePage {
     const flashDeal = {
       selectFlashDeal: async (dealText: string) => {
         await ensureTab('general');
-        await self.helpers.selectBootstrapOption(self.element('flashDealSelect'), dealText);
+        await this.helpers.selectBootstrapOption(this.element('flashDealSelect'), dealText);
       },
       fillFlashDiscount: async (discount: number) => {
         await ensureTab('general');
-        await self.fillWithLog(self.element('flashDiscountInput'), discount.toString());
+        await this.fillWithLog(this.element('flashDiscountInput'), discount.toString());
       },
       selectFlashDiscountType: async (type: 'Flat' | 'Percent') => {
         await ensureTab('general');
-        await self.helpers.selectBootstrapOption(self.element('flashDiscountTypeSelect'), type);
+        await this.helpers.selectBootstrapOption(this.element('flashDiscountTypeSelect'), type);
       },
       fill: async (data: {
         flashDeal?: string;
@@ -896,11 +1006,11 @@ export class CMSAddNewProductPage extends BasePage {
     const tax = {
       fillTax: async (taxValue: number) => {
         await ensureTab('general');
-        await self.fillWithLog(self.element('taxInput'), taxValue.toString());
+        await this.fillWithLog(this.element('taxInput'), taxValue.toString());
       },
       selectTaxType: async (type: 'Flat' | 'Percent') => {
         await ensureTab('general');
-        await self.helpers.selectBootstrapOption(self.element('taxTypeSelect'), type);
+        await this.helpers.selectBootstrapOption(this.element('taxTypeSelect'), type);
       },
       fill: async (data: {
         tax?: number;
@@ -916,44 +1026,44 @@ export class CMSAddNewProductPage extends BasePage {
       // Shipping Configuration subsection
       toggleCashOnDelivery: async (enabled: boolean) => {
         await ensureTab('shipping');
-        const checkbox = self.element('cashOnDeliveryCheckbox');
+        const checkbox = this.element('cashOnDeliveryCheckbox');
         const isChecked = await checkbox.isChecked();
         if (isChecked !== enabled) {
-          await self.element('cashOnDeliveryLabel').click();
+          await this.element('cashOnDeliveryLabel').click();
         }
       },
       toggleFreeShipping: async (enabled: boolean) => {
         await ensureTab('shipping');
-        const radio = self.element('freeShippingRadio');
+        const radio = this.element('freeShippingRadio');
         const isChecked = await radio.isChecked();
         if (isChecked !== enabled) {
-          await self.element('freeShippingLabel').click();
+          await this.element('freeShippingLabel').click();
         }
       },
       toggleFlatRate: async (enabled: boolean) => {
         await ensureTab('shipping');
-        const radio = self.element('flatRateRadio');
+        const radio = this.element('flatRateRadio');
         const isChecked = await radio.isChecked();
         if (isChecked !== enabled) {
-          await self.element('flatRateLabel').click();
+          await this.element('flatRateLabel').click();
         }
       },
       fillFlatShippingCost: async (cost: number) => {
         await ensureTab('shipping');
-        await self.fillWithLog(self.element('flatShippingCostInput'), cost.toString());
+        await this.fillWithLog(this.element('flatShippingCostInput'), cost.toString());
       },
       toggleIsQuantityMultiplied: async (enabled: boolean) => {
         await ensureTab('shipping');
-        const checkbox = self.element('isQuantityMultipliedCheckbox');
+        const checkbox = this.element('isQuantityMultipliedCheckbox');
         const isChecked = await checkbox.isChecked();
         if (isChecked !== enabled) {
-          await self.element('isQuantityMultipliedLabel').click();
+          await this.element('isQuantityMultipliedLabel').click();
         }
       },
       // Estimate Shipping Time subsection
       fillEstShippingDays: async (days: number) => {
         await ensureTab('shipping');
-        await self.fillWithLog(self.element('estShippingDaysInput'), days.toString());
+        await this.fillWithLog(this.element('estShippingDaysInput'), days.toString());
       },
       fill: async (data: {
         cashOnDelivery?: boolean;
@@ -972,9 +1082,29 @@ export class CMSAddNewProductPage extends BasePage {
       },
     };
 
-    // General Tab - tổng hợp tất cả sections trong General tab
+    // ─── BƯỚC 3: TAB-LEVEL AGGREGATION ─────────────────────────────────
+    // Gộp nhiều small objects thành 1 object đại diện cho cả tab.
+    //
+    // General tab chứa NHIỀU sub-sections:
+    //   info (name, category, brand, unit, ...)
+    //   + description (richtext editor)
+    //   + status (featured, todaysDeal)
+    //   + flashDeal (deal, discount, type)
+    //   + tax (tax value, tax type)
+    //
+    // Spread (...info) → general kế thừa TẤT CẢ methods từ info.
+    // Gán trực tiếp  → general.fillDescription = description.fillDescription
+    //
+    // general.fill() là "super fill" — delegate xuống sub-section fill().
+    //
+    // VÍ DỤ:
+    //   sections.general.fill({ name: 'iPhone', tax: 10, featured: true })
+    //   → info.fill({ name: 'iPhone' })
+    //   → tax.fill({ tax: 10 })
+    //   → status.fill({ featured: true })
+    // ────────────────────────────────────────────────────────────────────────
     const general = {
-      // Product Information subsection
+      // Product Information subsection — spread tất cả methods từ info
       ...info,
       // Description subsection
       fillDescription: description.fillDescription,
@@ -1140,17 +1270,17 @@ export class CMSAddNewProductPage extends BasePage {
     const warranty = {
       toggleHasWarranty: async (enabled: boolean) => {
         await ensureTab('warranty');
-        const checkbox = self.page.locator('input[name="has_warranty"]');
+        const checkbox = this.page.locator('input[name="has_warranty"]');
         const isChecked = await checkbox.isChecked();
         if (isChecked !== enabled) {
-          const label = self.page.locator('label.aiz-switch').filter({ has: checkbox });
+          const label = this.page.locator('label.aiz-switch').filter({ has: checkbox });
           await label.click();
         }
       },
       selectWarranty: async (warrantyText: string) => {
         await ensureTab('warranty');
-        const warrantyButton = self.page.locator('button[data-id="warranty_id"]');
-        await self.helpers.selectBootstrapOption(warrantyButton, warrantyText);
+        const warrantyButton = this.page.locator('button[data-id="warranty_id"]');
+        await this.helpers.selectBootstrapOption(warrantyButton, warrantyText);
       },
       fill: async (data: {
         hasWarranty?: boolean;
@@ -1165,7 +1295,7 @@ export class CMSAddNewProductPage extends BasePage {
     const frequentlyBought = {
       selectSelectionType: async (type: 'product' | 'category') => {
         await ensureTab('frequenty_bought_product');
-        const radio = self.page.locator(`input[name="frequently_bought_selection_type"][value="${type}"]`);
+        const radio = this.page.locator(`input[name="frequently_bought_selection_type"][value="${type}"]`);
         await expect(radio).toBeVisible();
         if (!(await radio.isChecked())) {
           await radio.click();
@@ -1174,8 +1304,8 @@ export class CMSAddNewProductPage extends BasePage {
       selectCategory: async (categoryText: string) => {
         await ensureTab('frequenty_bought_product');
         await frequentlyBought.selectSelectionType('category');
-        const categoryButton = self.page.locator('select[name="fq_bought_product_category_id"]').locator('..').locator('button.dropdown-toggle').first();
-        await self.helpers.selectBootstrapOption(categoryButton, categoryText);
+        const categoryButton = this.page.locator('select[name="fq_bought_product_category_id"]').locator('..').locator('button.dropdown-toggle').first();
+        await this.helpers.selectBootstrapOption(categoryButton, categoryText);
       },
       fill: async (data: {
         selectionType?: 'product' | 'category';
@@ -1186,6 +1316,10 @@ export class CMSAddNewProductPage extends BasePage {
       },
     };
 
+    // ─── BƯỚC 4: RETURN — Expose cho this.sections ────────────────────
+    // Object này trở thành this.sections (khai báo ở constructor).
+    // Test truy cập: addNewProductPage.sections.general.fill({ ... })
+    // ────────────────────────────────────────────────────────────────────────
     return { general, filesAndMedia, priceAndStock, seo, shipping, warranty, frequentlyBought };
   }
 }

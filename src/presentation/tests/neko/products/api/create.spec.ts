@@ -7,194 +7,217 @@
  * Dùng: Zod schemas để tạo test data và validate lỗi
  */
 
-import { test, expect } from '@fixtures/neko/api/gatekeeper.api.fixture';
-import { ProductSchemas } from '@schemas/neko/ProductSchemas';
-import { ErrorSchemas } from '@schemas/neko/ErrorSchemas';
-import { Logger } from '@utils/Logger';
+import { test, expect } from "@fixtures/neko/api/gatekeeper.api.fixture";
+import { ProductSchemas } from "@schemas/neko/ProductSchemas";
+import { ErrorSchemas } from "@schemas/neko/ErrorSchemas";
+import { Logger } from "@utils/Logger";
 
-test.describe('API Products - POST Tạo mới', { tag: ['@crud', '@smoke'] }, () => {
-  let createdProductId: number | null = null;
+test.describe(
+  "API Products - POST Tạo mới",
+  { tag: ["@crud", "@smoke"] },
+  () => {
+    let createdProductId: number | null = null;
 
-  // Dọn dẹp sau mỗi test
-  test.afterEach(async ({ productService }) => {
-    if (createdProductId) {
-      await productService.deleteProduct(createdProductId);
-      Logger.info(`Đã dọn dẹp product: ${createdProductId}`, { context: 'cleanup' });
-      createdProductId = null;
-    }
-  });
-
-  // ═══════════════════════════════════════════════════════════════════════════
-  // 📦 SẢN PHẨM LOẠI HẠT (BEAN)
-  // ═══════════════════════════════════════════════════════════════════════════
-
-  test('TC_POST_01: Tạo sản phẩm hạt với trường tối thiểu', async ({ productService }) => {
-    const data = ProductSchemas.createBean();
-
-    const created = await productService.createProduct(data);
-    createdProductId = created.id;
-
-    expect(created.id).toBeDefined();
-    expect(created.type).toBe('bean');
-    expect(created.is_active).toBe(true);
-  });
-
-  test('TC_POST_02: Tạo sản phẩm hạt với override xuất xứ', async ({ productService }) => {
-    const data = ProductSchemas.createBean({ origin: 'Ethiopia' });
-
-    const created = await productService.createProduct(data);
-    createdProductId = created.id;
-
-    expect(created.origin).toBe('Ethiopia');
-    expect(created.type).toBe('bean');
-  });
-
-  test('TC_POST_03: Tạo sản phẩm hạt với override giá', async ({ productService }) => {
-    const data = ProductSchemas.createBean({ price_per_unit: 350000 });
-
-    const created = await productService.createProduct(data);
-    createdProductId = created.id;
-
-    expect(created.price_per_unit).toBe(350000);
-  });
-
-  test('TC_POST_04: Tạo sản phẩm hạt đầy đủ với specifications', async ({ productService }) => {
-    const data = ProductSchemas.createFullBean({
-      origin: 'Yemen',
-      roast_level: 'Dark',
+    // Dọn dẹp sau mỗi test
+    test.afterEach(async ({ productService }) => {
+      if (createdProductId) {
+        await productService.deleteProduct(createdProductId);
+        Logger.info(`Đã dọn dẹp product: ${createdProductId}`, {
+          context: "cleanup",
+        });
+        createdProductId = null;
+      }
     });
 
-    const created = await productService.createProduct(data);
-    createdProductId = created.id;
+    // ═══════════════════════════════════════════════════════════════════════════
+    // 📦 SẢN PHẨM LOẠI HẠT (BEAN)
+    // ═══════════════════════════════════════════════════════════════════════════
 
-    expect(created.origin).toBe('Yemen');
-    expect(created.roast_level).toBe('Dark');
-    expect(created.specifications).toBeDefined();
-  });
+    test("TC_POST_01: Tạo sản phẩm hạt với trường tối thiểu", async ({
+      productService,
+    }) => {
+      const data = ProductSchemas.createBean();
+      const created = await productService.createProduct(data);
+      createdProductId = created.id;
 
-  // ═══════════════════════════════════════════════════════════════════════════
-  // 🔧 SẢN PHẨM THIẾT BỊ (EQUIPMENT)
-  // ═══════════════════════════════════════════════════════════════════════════
-
-  test('TC_POST_05: Tạo thiết bị có bảo hành', async ({ productService }) => {
-    const data = ProductSchemas.createEquipment({
-      warranty_months: 24,
-      price_per_unit: 5000000,
+      expect(created.id).toBeDefined();
+      expect(created.type).toBe("bean");
+      expect(created.is_active).toBe(true);
     });
 
-    const created = await productService.createProduct(data);
-    createdProductId = created.id;
+    test("TC_POST_02: Tạo sản phẩm hạt với override xuất xứ", async ({
+      productService,
+    }) => {
+      const data = ProductSchemas.createBean({ origin: "Ethiopia" });
 
-    expect(created.type).toBe('equipment');
-    expect(created.warranty_months).toBe(24);
-    expect(created.price_per_unit).toBe(5000000);
-  });
+      const created = await productService.createProduct(data);
+      createdProductId = created.id;
 
-  test('TC_POST_06: Tạo thiết bị có specifications', async ({ productService }) => {
-    const data = ProductSchemas.createEquipment({
-      name: `DeLonghi EC685 ${Date.now()}`,
-      specifications: {
-        brand: 'DeLonghi',
-        model: 'EC685',
-        power: '1300W',
-        pressure: '15 bar',
-      },
+      expect(created.origin).toBe("Ethiopia");
+      expect(created.type).toBe("bean");
     });
 
-    const created = await productService.createProduct(data);
-    createdProductId = created.id;
+    test("TC_POST_03: Tạo sản phẩm hạt với override giá", async ({
+      productService,
+    }) => {
+      const data = ProductSchemas.createBean({ price_per_unit: 350000 });
 
-    expect(created.specifications).toBeDefined();
-  });
+      const created = await productService.createProduct(data);
+      createdProductId = created.id;
 
-  // ═══════════════════════════════════════════════════════════════════════════
-  // 🎁 SẢN PHẨM PHỤ KIỆN (ACCESSORY)
-  // ═══════════════════════════════════════════════════════════════════════════
-
-  test('TC_POST_07: Tạo sản phẩm phụ kiện', async ({ productService }) => {
-    const data = ProductSchemas.createAccessory({
-      name: `Coffee Filter ${Date.now()}`,
-      price_per_unit: 50000,
+      expect(created.price_per_unit).toBe(350000);
     });
 
-    const created = await productService.createProduct(data);
-    createdProductId = created.id;
+    test("TC_POST_04: Tạo sản phẩm hạt đầy đủ với specifications", async ({
+      productService,
+    }) => {
+      const data = ProductSchemas.createFullBean({
+        origin: "Yemen",
+        roast_level: "Dark",
+      });
 
-    expect(created.type).toBe('accessory');
-  });
+      const created = await productService.createProduct(data);
+      createdProductId = created.id;
 
-  // ═══════════════════════════════════════════════════════════════════════════
-  // ✅ KIỂM TRA VALIDATION RESPONSE
-  // ═══════════════════════════════════════════════════════════════════════════
-
-  test('TC_POST_08: Validate response của sản phẩm đã tạo', async ({ productService }) => {
-    const data = ProductSchemas.createBean({ origin: 'Brazil' });
-
-    const created = await productService.createProduct(data);
-    createdProductId = created.id;
-
-    // Validate response schema bằng Zod
-    const validated = ProductSchemas.Product.parse(created);
-
-    expect(validated.id).toBeDefined();
-    expect(validated.name).toBeTruthy();
-    expect(validated.type).toBe('bean');
-  });
-
-  // ═══════════════════════════════════════════════════════════════════════════
-  // ❌ NEGATIVE TESTS — Kiểm tra lỗi validation (dùng createProductExpectError)
-  // ═══════════════════════════════════════════════════════════════════════════
-
-  test('TC_POST_09: Từ chối body rỗng', async ({ productService }) => {
-    // Pattern gọn: một method vừa validate status vừa validate error schema
-    const error = await productService.createProductExpectError({});
-    // Dùng helper để lấy error messages bất kể format
-    const messages = ErrorSchemas.getErrorMessages(error);
-    expect(messages.length).toBeGreaterThan(0);
-  });
-
-  test('TC_POST_10: Từ chối thiếu trường name', async ({ productService }) => {
-    const error = await productService.createProductExpectError({
-      type: 'bean',
-      price_per_unit: 100000,
+      expect(created.origin).toBe("Yemen");
+      expect(created.roast_level).toBe("Dark");
+      expect(created.specifications).toBeDefined();
     });
 
-    // Dùng helper để trích xuất error type-safe
-    const messages = ErrorSchemas.getErrorMessages(error);
-    expect(messages.length).toBeGreaterThan(0);
-  });
+    // ═══════════════════════════════════════════════════════════════════════════
+    // 🔧 SẢN PHẨM THIẾT BỊ (EQUIPMENT)
+    // ═══════════════════════════════════════════════════════════════════════════
 
-  test('TC_POST_11: Từ chối giá trị type không hợp lệ', async ({ productService }) => {
-    const error = await productService.createProductExpectError({
-      name: `Invalid Type ${Date.now()}`,
-      type: 'invalid_type', // Giá trị enum không hợp lệ
-      price_per_unit: 100000,
+    test("TC_POST_05: Tạo thiết bị có bảo hành", async ({ productService }) => {
+      const data = ProductSchemas.createEquipment({
+        warranty_months: 24,
+        price_per_unit: 5000000,
+      });
+
+      const created = await productService.createProduct(data);
+      createdProductId = created.id;
+
+      expect(created.type).toBe("equipment");
+      expect(created.warranty_months).toBe(24);
+      expect(created.price_per_unit).toBe(5000000);
     });
 
-    const messages = ErrorSchemas.getErrorMessages(error);
-    expect(messages.length).toBeGreaterThan(0);
-  });
+    test("TC_POST_06: Tạo thiết bị có specifications", async ({
+      productService,
+    }) => {
+      const data = ProductSchemas.createEquipment({
+        name: `DeLonghi EC685 ${Date.now()}`,
+        specifications: {
+          brand: "DeLonghi",
+          model: "EC685",
+          power: "1300W",
+          pressure: "15 bar",
+        },
+      });
 
-  test('TC_POST_12: Từ chối giá âm', async ({ productService }) => {
-    // API có thể không validate giá âm — dùng raw method cho edge case
-    const response = await productService.createProductRaw({
-      name: `Negative Price ${Date.now()}`,
-      type: 'bean',
-      price_per_unit: -100,
+      const created = await productService.createProduct(data);
+      createdProductId = created.id;
+
+      expect(created.specifications).toBeDefined();
     });
 
-    // API có thể chấp nhận giá âm (không validate) — điều chỉnh expectation nếu cần
-    expect([201, 400, 422]).toContain(response.status());
-  });
+    // ═══════════════════════════════════════════════════════════════════════════
+    // 🎁 SẢN PHẨM PHỤ KIỆN (ACCESSORY)
+    // ═══════════════════════════════════════════════════════════════════════════
 
-  test('TC_POST_13: Từ chối giá không phải số (string)', async ({ productService }) => {
-    const error = await productService.createProductExpectError({
-      name: `String Price ${Date.now()}`,
-      type: 'bean',
-      price_per_unit: 'not_a_number', // Sai kiểu dữ liệu
+    test("TC_POST_07: Tạo sản phẩm phụ kiện", async ({ productService }) => {
+      const data = ProductSchemas.createAccessory({
+        name: `Coffee Filter ${Date.now()}`,
+        price_per_unit: 50000,
+      });
+
+      const created = await productService.createProduct(data);
+      createdProductId = created.id;
+
+      expect(created.type).toBe("accessory");
     });
 
-    const messages = ErrorSchemas.getErrorMessages(error);
-    expect(messages.length).toBeGreaterThan(0);
-  });
-});
+    // ═══════════════════════════════════════════════════════════════════════════
+    // ✅ KIỂM TRA VALIDATION RESPONSE
+    // ═══════════════════════════════════════════════════════════════════════════
+
+    test("TC_POST_08: Validate response của sản phẩm đã tạo", async ({
+      productService,
+    }) => {
+      const data = ProductSchemas.createBean({ origin: "Brazil" });
+
+      const created = await productService.createProduct(data);
+      createdProductId = created.id;
+
+      // Validate response schema bằng Zod
+      const validated = ProductSchemas.Product.parse(created);
+
+      expect(validated.id).toBeDefined();
+      expect(validated.name).toBeTruthy();
+      expect(validated.type).toBe("bean");
+    });
+
+    // ═══════════════════════════════════════════════════════════════════════════
+    // ❌ NEGATIVE TESTS — Kiểm tra lỗi validation (dùng createProductExpectError)
+    // ═══════════════════════════════════════════════════════════════════════════
+
+    test("TC_POST_09: Từ chối body rỗng", async ({ productService }) => {
+      // Pattern gọn: một method vừa validate status vừa validate error schema
+      const error = await productService.createProductExpectError({});
+      // Dùng helper để lấy error messages bất kể format
+      const messages = ErrorSchemas.getErrorMessages(error);
+      expect(messages.length).toBeGreaterThan(0);
+    });
+
+    test("TC_POST_10: Từ chối thiếu trường name", async ({
+      productService,
+    }) => {
+      const error = await productService.createProductExpectError({
+        type: "bean",
+        price_per_unit: 100000,
+      });
+
+      // Dùng helper để trích xuất error type-safe
+      const messages = ErrorSchemas.getErrorMessages(error);
+      expect(messages.length).toBeGreaterThan(0);
+    });
+
+    test("TC_POST_11: Từ chối giá trị type không hợp lệ", async ({
+      productService,
+    }) => {
+      const error = await productService.createProductExpectError({
+        name: `Invalid Type ${Date.now()}`,
+        type: "invalid_type", // Giá trị enum không hợp lệ
+        price_per_unit: 100000,
+      });
+
+      const messages = ErrorSchemas.getErrorMessages(error);
+      expect(messages.length).toBeGreaterThan(0);
+    });
+
+    test("TC_POST_12: Từ chối giá âm", async ({ productService }) => {
+      // API có thể không validate giá âm — dùng raw method cho edge case
+      const response = await productService.createProductRaw({
+        name: `Negative Price ${Date.now()}`,
+        type: "bean",
+        price_per_unit: -100,
+      });
+
+      // API có thể chấp nhận giá âm (không validate) — điều chỉnh expectation nếu cần
+      expect([201, 400, 422]).toContain(response.status());
+    });
+
+    test("TC_POST_13: Từ chối giá không phải số (string)", async ({
+      productService,
+    }) => {
+      const error = await productService.createProductExpectError({
+        name: `String Price ${Date.now()}`,
+        type: "bean",
+        price_per_unit: "not_a_number", // Sai kiểu dữ liệu
+      });
+
+      const messages = ErrorSchemas.getErrorMessages(error);
+      expect(messages.length).toBeGreaterThan(0);
+    });
+  },
+);

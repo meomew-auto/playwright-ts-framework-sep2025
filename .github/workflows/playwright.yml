@@ -158,7 +158,7 @@ jobs:
         if: always()
         run: |
           echo "Looking for history.jsonl..."
-          ls -la ./history.jsonl 2>/dev/null && cat ./history.jsonl | head -c 200 || echo "Not found - will create new"
+          ls -la ./history.jsonl 2>/dev/null && head -c 200 ./history.jsonl || echo "Not found - will create new"
 
       - name: 📊 Generate Allure Report
         if: always()
@@ -206,7 +206,7 @@ jobs:
   deploy-report:
     name: 🚀 Deploy Allure to GitHub Pages
     needs: test
-    if: always() && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/feature/ci')
+    if: always() && github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
     permissions:
       pages: write

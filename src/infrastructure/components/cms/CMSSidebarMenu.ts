@@ -1,4 +1,5 @@
 import { Locator, Page } from '@playwright/test';
+import { Logger } from '../../utils/Logger';
 
 /**
  * CMS Sidebar Menu Component
@@ -36,7 +37,7 @@ export class CMSSidebarMenu {
    * @param menuText - Text của menu item cần click
    */
   async clickMenuItem(menuText: string): Promise<void> {
-    console.log(`[CMSSidebarMenu] Click menu item: ${menuText}`);
+    Logger.ui(`📂 Sidebar menu: ${menuText}`);
     const menuItem = this.getMenuItemByText(menuText);
     await menuItem.locator('.aiz-side-nav-link').first().click();
   }
@@ -48,7 +49,7 @@ export class CMSSidebarMenu {
    * @param subMenuText - Text của submenu cần click
    */
   async clickSubMenuItem(parentMenuText: string, subMenuText: string): Promise<void> {
-    console.log(`[CMSSidebarMenu] Click submenu: ${parentMenuText} > ${subMenuText}`);
+    Logger.ui(`📂 Sidebar submenu: ${parentMenuText} > ${subMenuText}`);
     
     // Tìm menu cha và expand nếu chưa mở
     const parentMenuItem = this.getMenuItemByText(parentMenuText);

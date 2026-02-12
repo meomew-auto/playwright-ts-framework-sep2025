@@ -30,6 +30,7 @@ import { ViewportType } from '../../fixtures/common/ViewportType';
 import { TableResolver } from '@collection/TableResolver';
 import { CollectionHelper } from '@collection/CollectionHelper';
 import { TextMatcher, FieldCleanerMap } from '@collection/FieldResolver';
+import { Logger } from '../../utils/Logger';
 
 // ============================================================
 // 📌 TYPES - Định nghĩa các key cho Table Columns
@@ -147,7 +148,9 @@ export class CMSAllProductsPage extends BasePage {
   private get fieldCleaners(): FieldCleanerMap {
     return {
       name: (text: string) => text.trim(),
-      info: (text: string) => text.trim(),
+      // Collapse multiline whitespace → single line, separated by " | "
+      // "Num of Sale: 0 Times \n       Base Price: $509.19" → "Num of Sale: 0 Times | Base Price: $509.19"
+      info: (text: string) => text.split(/\s*\n\s*/).map(s => s.trim()).filter(Boolean).join(' | '),
       totalStock: (text: string) => {
         const trimmed = text.trim();
         const match = trimmed.match(/^\d+/);
@@ -408,14 +411,14 @@ export class CMSAllProductsPage extends BasePage {
 
   /**
    * Tìm row đầu tiên khớp với filters qua nhiều trang
-   * Tự động chuyển trang nếu không tìm thấy ở trang hiện tại
+   * Tự động: về trang đầu → detect tổng trang → scan tất cả
+   * @returns { row, pageNumber } — row Locator + trang tìm thấy
    */
   async findRowByFiltersAcrossPages(
     filters: Record<ProductColumnKey | string, TextMatcher>,
     options?: { maxPages?: number }
-  ): Promise<Locator> {
+  ): Promise<{ row: Locator; pageNumber: number }> {
     const helper = await this.ensureCollectionHelper();
-    // Use findItemWithNextPage since we have goToNextPage pattern
     const result = await helper.findItemWithNextPage(
       () => this.getRowsLocator(),
       Object.keys(filters)[0],
@@ -426,23 +429,24 @@ export class CMSAllProductsPage extends BasePage {
       },
       this.fieldCleaners
     );
-    return result.item;
+    return { row: result.item, pageNumber: result.pageNumber };
   }
 
   /**
    * Lấy dữ liệu của row khớp với filters qua nhiều trang
-   * Tự động chuyển trang nếu không tìm thấy ở trang hiện tại
+   * @returns { data, pageNumber } — row data + trang tìm thấy
    */
   async getRowDataByFiltersAcrossPages(
     filters: Record<ProductColumnKey | string, TextMatcher>,
     options?: { maxPages?: number },
     columnKeys?: Array<ProductColumnKey | string>
-  ): Promise<Record<string, string>> {
-    const row = await this.findRowByFiltersAcrossPages(filters, options);
-    return this.getRowDataForItem(
+  ): Promise<{ data: Record<string, string>; pageNumber: number }> {
+    const { row, pageNumber } = await this.findRowByFiltersAcrossPages(filters, options);
+    const data = await this.getRowDataForItem(
       row,
       columnKeys || (DEFAULT_PRODUCT_TABLE_COLUMNS as unknown as Array<ProductColumnKey>),
     );
+    return { data, pageNumber };
   }
 
   // ═══════════════════════════════════════════════════════════
@@ -600,6 +604,8 @@ export class CMSAllProductsPage extends BasePage {
   async selectSort(sortOption: string) {
     const selectButton = this.getLocator('sortSelectButton');
     await this.helpers.selectBootstrapOption(selectButton, sortOption);
+    // Đợi page reload xong sau khi sort (tránh đọc data giữa lúc re-render)
+    await this.page.waitForLoadState('networkidle');
     await this.waitForTableReady();
     this.resetCollectionCache();
   }
@@ -640,15 +646,14 @@ export class CMSAllProductsPage extends BasePage {
       
       if (productNames.length > 0) {
         const target = productNames[0];
-        console.log(`[Helper] Found target on current page: "${target}"`);
-        // Không quay về trang 1 - ở lại trang hiện tại để thao tác luôn
+        Logger.info(`🎯 Tìm thấy target ở trang hiện tại: "${target}"`);
         return target;
       }
       
-      console.log(`[Helper] Next page is empty`);
+      Logger.info('⚠️ Trang tiếp theo trống');
       return null;
     } catch (error) {
-      console.log(`[Helper] Cannot go to next page (maybe only 1 page exists): ${error instanceof Error ? error.message : String(error)}`);
+      Logger.info(`⚠️ Không thể chuyển trang (có thể chỉ có 1 trang): ${error instanceof Error ? error.message : String(error)}`);
       return null;
     }
   }

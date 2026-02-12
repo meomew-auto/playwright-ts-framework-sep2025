@@ -41,7 +41,7 @@ export abstract class BasePage {
   // Viewport type for responsive locators
   protected viewportType: ViewportType;
 
-  constructor(protected page: Page, viewportType: ViewportType = 'desktop') {
+  constructor(public readonly page: Page, viewportType: ViewportType = 'desktop') {
     this.helpers = new BootstrapSelectHelper(page);
     this.viewportType = viewportType;
   }

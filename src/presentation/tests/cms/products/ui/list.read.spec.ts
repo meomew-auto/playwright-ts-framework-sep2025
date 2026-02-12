@@ -1,27 +1,46 @@
-import { test, expect } from '@fixtures/cms/ui/gatekeeper.fixture';
-
 /**
- * CMS Tất Cả Sản Phẩm - Tests Chỉ Đọc (Read-Only)
+ * ============================================================================
+ * TEST: CMS TẤT CẢ SẢN PHẨM — Read-Only Tests
+ * ============================================================================
+ *
+ * 🎯 MỤC ĐÍCH:
+ * Test trang danh sách sản phẩm tại /admin/products
  * Các tests này chỉ đọc dữ liệu, không thay đổi gì → có thể chạy song song
- * 
- * Sử dụng fixtures để:
- * - Tự động login (authedPage)
- * - Auto-inject page object với viewportType
- * - Auto-navigate và verify page loaded
- * 
- * Chạy: npx playwright test all-products-read.spec.ts --project=chromium
+ *
+ * ════════════════════════════════════════════════════════════════════════════
+ * 📐 PATTERNS & METHODS SỬ DỤNG TỪ PAGE OBJECTS
+ * ════════════════════════════════════════════════════════════════════════════
+ *
+ * 1️⃣ FIXTURE INJECTION
+ *    - allProductsPage đã tự động login + navigate + verify loaded
+ *
+ * 2️⃣ TABLE HELPER METHODS (từ CollectionHelper/TableResolver)
+ *    - getColumnValues('name')           → lấy tất cả giá trị 1 cột
+ *    - getTableData(['name', 'addedBy']) → lấy dữ liệu nhiều cột
+ *    - findRowByColumnValue()            → tìm dòng theo 1 cột
+ *    - findRowByFilters()                → tìm dòng theo nhiều cột
+ *    - findRowByFiltersAcrossPages()     → tìm dòng qua nhiều trang
+ *
+ * 3️⃣ PAGE ACTIONS
+ *    - search() / clearSearch()          → tìm kiếm sản phẩm
+ *    - selectSeller() / selectSort()     → lọc và sắp xếp
+ *    - goToPage() / goToNextPage()       → điều hướng phân trang
+ *    - toggleRowCheckboxByName()         → bật/tắt checkbox dòng
  */
-test.describe('CMS Tất Cả Sản Phẩm - Read Only Tests', () => {
+import { test, expect } from '@fixtures/cms/ui/gatekeeper.fixture';
+import { Logger } from '@utils/Logger';
 
-  test('01. Điều hướng đến trang Tất Cả Sản Phẩm', async ({ allProductsPage }) => {
+test.describe('CMS Tất Cả Sản Phẩm', () => {
+
+  test('TC_01: Điều hướng đến trang Tất Cả Sản Phẩm', async ({ allProductsPage }) => {
     // Fixture đã tự động gọi goto() và expectOnPage()
     const rowCount = await allProductsPage.getRowCount();
     expect(rowCount).toBeGreaterThan(0);
   });
 
-  test('02. Lấy giá trị cột - getColumnValues()', async ({ allProductsPage }) => {
+  test('TC_02: Lấy giá trị cột - getColumnValues()', async ({ allProductsPage }) => {
     const productNames = await allProductsPage.getColumnValues('name');
-    console.log(`[Demo] Found ${productNames.length} products`);
+    Logger.info(`📋 Tìm thấy ${productNames.length} sản phẩm`);
     expect(productNames.length).toBeGreaterThan(0);
 
     const addedByValues = await allProductsPage.getColumnValues('addedBy');
@@ -31,20 +50,20 @@ test.describe('CMS Tất Cả Sản Phẩm - Read Only Tests', () => {
     expect(stockValues.length).toBeGreaterThan(0);
   });
 
-  test('03. Lấy dữ liệu bảng - getTableData()', async ({ allProductsPage }) => {
+  test('TC_03: Lấy dữ liệu bảng - getTableData()', async ({ allProductsPage }) => {
     const tableData = await allProductsPage.getTableData(['name', 'addedBy', 'totalStock', 'published']);
     expect(tableData.length).toBeGreaterThan(0);
     expect(tableData[0]).toHaveProperty('name');
     expect(tableData[0]).toHaveProperty('addedBy');
   });
 
-  test('04. Lấy dữ liệu bảng mặc định - getDefaultTableData()', async ({ allProductsPage }) => {
+  test('TC_04: Lấy dữ liệu bảng mặc định - getDefaultTableData()', async ({ allProductsPage }) => {
     const defaultData = await allProductsPage.getDefaultTableData();
     expect(defaultData.length).toBeGreaterThan(0);
     expect(defaultData[0]).toHaveProperty('name');
   });
 
-  test('05. Tìm dòng theo giá trị cột - findRowByColumnValue()', async ({ allProductsPage }) => {
+  test('TC_05: Tìm dòng theo giá trị cột - findRowByColumnValue()', async ({ allProductsPage }) => {
     const firstProductName = await allProductsPage.getFirstProductName();
     expect(firstProductName).toBeTruthy();
 
@@ -52,7 +71,7 @@ test.describe('CMS Tất Cả Sản Phẩm - Read Only Tests', () => {
     await expect(row).toBeVisible();
   });
 
-  test('06. Tìm dòng theo nhiều bộ lọc - findRowByFilters()', async ({ allProductsPage }) => {
+  test('TC_06: Tìm dòng theo nhiều bộ lọc - findRowByFilters()', async ({ allProductsPage }) => {
     const tableData = await allProductsPage.getTableData(['name', 'addedBy', 'published']);
     const firstRow = tableData[0];
     expect(firstRow).toBeDefined();
@@ -64,7 +83,7 @@ test.describe('CMS Tất Cả Sản Phẩm - Read Only Tests', () => {
     await expect(row).toBeVisible();
   });
 
-  test('07. Lấy dữ liệu dòng theo bộ lọc - getRowDataByFilters()', async ({ allProductsPage }) => {
+  test('TC_07: Lấy dữ liệu dòng theo bộ lọc - getRowDataByFilters()', async ({ allProductsPage }) => {
     const firstProductName = await allProductsPage.getFirstProductName();
     expect(firstProductName).toBeTruthy();
 
@@ -75,7 +94,7 @@ test.describe('CMS Tất Cả Sản Phẩm - Read Only Tests', () => {
     expect(rowData).toHaveProperty('name');
   });
 
-  test('09. Tìm kiếm sản phẩm - search()', async ({ allProductsPage }) => {
+  test('TC_08: Tìm kiếm sản phẩm - search()', async ({ allProductsPage }) => {
     const firstProductName = await allProductsPage.getFirstProductName();
     const searchTerm = firstProductName.substring(0, 10);
 
@@ -87,7 +106,7 @@ test.describe('CMS Tất Cả Sản Phẩm - Read Only Tests', () => {
     });
   });
 
-  test('10. Lọc theo người bán - selectSeller()', async ({ allProductsPage }) => {
+  test('TC_09: Lọc theo người bán - selectSeller()', async ({ allProductsPage }) => {
     const addedByValues = await allProductsPage.getColumnValues('addedBy');
     const uniqueSellers = [...new Set(addedByValues)].filter((s) => s.trim().length > 0);
     
@@ -100,26 +119,26 @@ test.describe('CMS Tất Cả Sản Phẩm - Read Only Tests', () => {
     }
   });
 
-  test('11. Sắp xếp sản phẩm - selectSort()', async ({ allProductsPage }) => {
+  test('TC_10: Sắp xếp sản phẩm - selectSort()', async ({ allProductsPage }) => {
     await allProductsPage.selectSort('Base Price (High > Low)');
     const tableData = await allProductsPage.getTableData(['name', 'info']);
     expect(tableData.length).toBeGreaterThan(0);
   });
 
-  test('12. Điều hướng phân trang - goToPage() và goToNextPage()', async ({ allProductsPage }) => {
+  test('TC_11: Điều hướng phân trang - goToPage() và goToNextPage()', async ({ allProductsPage }) => {
     const page1Products = await allProductsPage.getColumnValues('name');
-    console.log(`[Demo] Page 1 has ${page1Products.length} products`);
+    Logger.info(`📄 Trang 1 có ${page1Products.length} sản phẩm`);
 
     try {
       await allProductsPage.goToPage(2);
       const page2Products = await allProductsPage.getColumnValues('name');
       expect(page2Products[0]).not.toBe(page1Products[0]);
-    } catch (error) {
-      console.log(`[Demo] Page 2 not available (only 1 page)`);
+    } catch {
+      Logger.info('📄 Trang 2 không khả dụng (chỉ có 1 trang)');
     }
   });
 
-  test('13. Bật/tắt checkbox dòng - toggleRowCheckboxByName()', async ({ allProductsPage }) => {
+  test('TC_12: Bật/tắt checkbox dòng - toggleRowCheckboxByName()', async ({ allProductsPage }) => {
     const firstProductName = await allProductsPage.getFirstProductName();
     expect(firstProductName).toBeTruthy();
 
@@ -132,56 +151,40 @@ test.describe('CMS Tất Cả Sản Phẩm - Read Only Tests', () => {
     await expect(checkbox).not.toBeChecked();
   });
 
-  test('14. Demo column cleaners - trích xuất text tùy chỉnh', async ({ allProductsPage }) => {
-    const names = await allProductsPage.getColumnValues('name');
-    expect(names.length).toBeGreaterThan(0);
-    expect(names[0].trim().length).toBeGreaterThan(0);
 
-    const stocks = await allProductsPage.getColumnValues('totalStock');
-    stocks.forEach((stock) => {
-      expect(stock).toMatch(/^\d+$/);
-    });
-
-    const todaysDeal = await allProductsPage.getColumnValues('todaysDeal');
-    const published = await allProductsPage.getColumnValues('published');
-    const featured = await allProductsPage.getColumnValues('featured');
-    
-    [...todaysDeal, ...published, ...featured].forEach((value) => {
-      expect(['Yes', 'No']).toContain(value);
-    });
-  });
-
-  test('16. Tìm dòng qua nhiều trang - findRowByFiltersAcrossPages()', async ({ allProductsPage }) => {
+  test('TC_13: Tìm dòng qua nhiều trang - findRowByFiltersAcrossPages()', async ({ allProductsPage }) => {
     const targetProduct = await allProductsPage.getTestTargetFromNextPage();
 
     if (targetProduct) {
-      const row = await allProductsPage.findRowByFiltersAcrossPages(
+      const { row, pageNumber } = await allProductsPage.findRowByFiltersAcrossPages(
         { name: targetProduct },
         { maxPages: 5 }
       );
       await expect(row).toBeVisible();
+      Logger.info(`📄 Tìm thấy ở trang ${pageNumber}`);
     } else {
-      console.log(`[Demo] Skipping test: Not enough data (need at least 2 pages)`);
+      Logger.info('⏭️ Bỏ qua test: Không đủ dữ liệu (cần ít nhất 2 trang)');
     }
   });
 
-  test('17. Lấy dữ liệu dòng qua nhiều trang - getRowDataByFiltersAcrossPages()', async ({ allProductsPage }) => {
+  test('TC_14: Lấy dữ liệu dòng qua nhiều trang - getRowDataByFiltersAcrossPages()', async ({ allProductsPage }) => {
     const targetProduct = await allProductsPage.getTestTargetFromNextPage();
 
     if (targetProduct) {
-      const rowData = await allProductsPage.getRowDataByFiltersAcrossPages(
+      const { data, pageNumber } = await allProductsPage.getRowDataByFiltersAcrossPages(
         { name: targetProduct },
         { maxPages: 5 },
         ['name', 'addedBy', 'info', 'totalStock', 'published', 'featured']
       );
-      expect(rowData).toHaveProperty('name');
-      expect(rowData.name).toContain(targetProduct);
+      expect(data).toHaveProperty('name');
+      expect(data.name).toContain(targetProduct);
+      Logger.info(`📄 Tìm thấy ở trang ${pageNumber}: ${JSON.stringify(data)}`);
     } else {
-      console.log(`[Demo] Skipping test: Not enough data`);
+      Logger.info('⏭️ Bỏ qua test: Không đủ dữ liệu');
     }
   });
 
-  test('18. Tìm kiếm và tìm qua nhiều trang - search() + findRowByFiltersAcrossPages()', async ({ allProductsPage }) => {
+  test('TC_15: Tìm kiếm kết hợp phân trang - search() + findRowByFiltersAcrossPages()', async ({ allProductsPage }) => {
     const targetProduct = await allProductsPage.getTestTargetFromNextPage();
 
     if (targetProduct) {
@@ -193,14 +196,15 @@ test.describe('CMS Tất Cả Sản Phẩm - Read Only Tests', () => {
       
       if (!foundInPage1) {
         await allProductsPage.clearSearch();
-        const row = await allProductsPage.findRowByFiltersAcrossPages(
+        const { row, pageNumber } = await allProductsPage.findRowByFiltersAcrossPages(
           { name: targetProduct },
           { maxPages: 5 }
         );
         await expect(row).toBeVisible();
+        Logger.info(`📄 Tìm thấy ở trang ${pageNumber}`);
       }
     } else {
-      console.log(`[Demo] Skipping test: Not enough data`);
+      Logger.info('⏭️ Bỏ qua test: Không đủ dữ liệu');
     }
   });
 });

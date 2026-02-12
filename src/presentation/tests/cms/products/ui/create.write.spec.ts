@@ -1,120 +1,161 @@
-import { test, expect } from '@playwright/test';
-import { CMSLoginPage } from '@pages/cms/CMSLoginPage';
-import { CMSDashboardPage } from '@pages/cms/CMSDashboardPage';
-import { CMSAddNewProductPage } from '@pages/cms/CMSAddNewProductPage';
-import { createMinimalProductInfo, createFullProductInfo, createProductWithVariations, createProductWithDiscount, createFeaturedProduct } from '@data/cms/ProductDataFactory';
+/**
+ * ============================================================================
+ * TEST: CMS THÊM SẢN PHẨM MỚI
+ * ============================================================================
+ *
+ * 🎯 MỤC ĐÍCH:
+ * Test form tạo sản phẩm mới tại /admin/products/create
+ *
+ * ════════════════════════════════════════════════════════════════════════════
+ * 📐 PATTERNS & METHODS SỬ DỤNG TỪ PAGE OBJECTS
+ * ════════════════════════════════════════════════════════════════════════════
+ *
+ * 1️⃣ FIXTURE INJECTION (thay vì new Page() thủ công)
+ *    ┌─────────────────────────────────────────────────────────────────────┐
+ *    │ test('...', async ({ addNewProductPage, dashboardPage }) => {      │
+ *    │   // addNewProductPage đã tự động:                                 │
+ *    │   //   - Login (authedPage fixture)                                │
+ *    │   //   - Navigate đến /admin/products/create                      │
+ *    │   //   - Verify trang đã load (expectOnPage)                      │
+ *    │   // → Test KHÔNG cần setup gì thêm                               │
+ *    │ });                                                                │
+ *    └─────────────────────────────────────────────────────────────────────┘
+ *
+ * 2️⃣ SECTIONS.xxx.fill() — Bulk fill nhiều fields cùng lúc
+ *    ┌─────────────────────────────────────────────────────────────────────┐
+ *    │ // Điền nhiều fields trong 1 lần gọi                               │
+ *    │ await addNewProductPage.sections.general.fill({                    │
+ *    │   name: 'iPhone 15',                                               │
+ *    │   category: null,  // null = chọn category đầu tiên               │
+ *    │   unit: 'Pc',                                                      │
+ *    │ });                                                                │
+ *    │                                                                    │
+ *    │ // Các section có sẵn:                                             │
+ *    │ // .sections.general         → info, description, status, tax      │
+ *    │ // .sections.priceAndStock   → pricing, variations, stock          │
+ *    │ // .sections.filesAndMedia   → images, videos, pdf                 │
+ *    │ // .sections.seo             → meta title, description, image      │
+ *    │ // .sections.shipping        → COD, free shipping, flat rate       │
+ *    └─────────────────────────────────────────────────────────────────────┘
+ *
+ * 3️⃣ FACADE METHODS — Shortcut gọi từng field (delegate xuống sections)
+ *    ┌─────────────────────────────────────────────────────────────────────┐
+ *    │ // Thay vì: addNewProductPage.sections.shipping.toggleCashOnDel... │
+ *    │ await addNewProductPage.toggleCashOnDelivery(true);                │
+ *    │ await addNewProductPage.toggleFeatured(true);                      │
+ *    │ // Dùng khi chỉ cần thao tác 1-2 fields riêng lẻ                  │
+ *    └─────────────────────────────────────────────────────────────────────┘
+ *
+ * 4️⃣ ELEMENT() — Truy cập locator để assert
+ *    ┌─────────────────────────────────────────────────────────────────────┐
+ *    │ // Lấy locator từ pageLocators đã khai báo trong Page Object       │
+ *    │ await expect(addNewProductPage.element('productNameInput'))        │
+ *    │   .toHaveValue('iPhone 15');                                       │
+ *    │ await expect(addNewProductPage.element('featuredCheckbox'))        │
+ *    │   .toBeChecked();                                                  │
+ *    └─────────────────────────────────────────────────────────────────────┘
+ *
+ * 5️⃣ DATA SOURCES — 2 cách tạo test data
+ *    ┌─────────────────────────────────────────────────────────────────────┐
+ *    │ // Factory: random data mỗi lần chạy (Faker.js)                   │
+ *    │ const data = createMinimalProductInfo();                           │
+ *    │                                                                    │
+ *    │ // Schema/Repository: data cố định từ JSON file                    │
+ *    │ const data = getTestData('products', 'minimal');                   │
+ *    └─────────────────────────────────────────────────────────────────────┘
+ *
+ * 6️⃣ AUTHEDPAGE — Page đã đăng nhập (cho raw locator assertions)
+ *    ┌─────────────────────────────────────────────────────────────────────┐
+ *    │ // Khi cần assert element KHÔNG có trong Page Object               │
+ *    │ await expect(authedPage.locator('.alert-success')).toBeVisible();  │
+ *    │ // authedPage = Playwright Page đã login, inject qua fixture       │
+ *    └─────────────────────────────────────────────────────────────────────┘
+ */
+import { test, expect } from '@fixtures/cms/ui/gatekeeper.fixture';
+import { createMinimalProductInfo, createFullProductInfo, createProductWithDiscount } from '@data/cms/ProductDataFactory';
 import { getTestData } from '@data/common/TestDataRepository';
 
-test.describe('CMS Add New Product', () => {
-  test.beforeEach(async ({ page }) => {
-    const loginPage = new CMSLoginPage(page);
-    await loginPage.goto();
-    await loginPage.expectOnPage();
-    await loginPage.login('admin@example.com', '123456');
-    await loginPage.expectLoggedIn();
-  });
+test.describe('CMS Thêm sản phẩm mới', () => {
 
-  test('should navigate to Add New Product page', async ({ page }) => {
-    const dashboardPage = new CMSDashboardPage(page);
-    await dashboardPage.goto();
-    await dashboardPage.expectOnPage();
-
-    // Navigate to Add New Product via sidebar
+  test('TC_01: Điều hướng tới trang Thêm sản phẩm mới', async ({ dashboardPage, addNewProductPage }) => {
     await dashboardPage.navigateToSubMenu('Products', 'Add New Product');
-
-    const addProductPage = new CMSAddNewProductPage(page);
-    await addProductPage.expectOnPage();
+    await addNewProductPage.expectOnPage();
   });
 
-  test('should fill basic product information using factory', async ({ page }) => {
-    const addProductPage = new CMSAddNewProductPage(page);
-    await addProductPage.goto();
-    await addProductPage.expectOnPage();
-
-    // Generate product data using factory
+  test('TC_02: Điền thông tin sản phẩm cơ bản (Factory)', async ({ addNewProductPage, authedPage }) => {
     const productData = createMinimalProductInfo();
 
-    // Fill basic required fields - dùng bulk fill, category/brand chọn tự động
-    await addProductPage.sections.general.fill({
+    // Fill basic required fields
+    await addNewProductPage.sections.general.fill({
       name: productData.name,
       category: null,
       brand: null,
       unit: productData.unit,
       minQty: productData.minQty,
     });
-    await addProductPage.sections.priceAndStock.fill({
+    await addNewProductPage.sections.priceAndStock.fill({
       unitPrice: productData.unitPrice,
       quantity: productData.quantity,
     });
 
     // Verify fields are filled
-    await expect(addProductPage.element('productNameInput')).toHaveValue(new RegExp(productData.name));
-    await expect(addProductPage.element('unitInput')).toHaveValue(productData.unit);
-    await expect(addProductPage.element('minQtyInput')).toHaveValue(productData.minQty.toString());
-    await expect(addProductPage.element('unitPriceInput')).toHaveValue(productData.unitPrice.toString());
-    await expect(addProductPage.element('quantityInput')).toHaveValue(productData.quantity.toString());
+    await expect(addNewProductPage.element('productNameInput')).toHaveValue(new RegExp(productData.name));
+    await expect(addNewProductPage.element('unitInput')).toHaveValue(productData.unit);
+    await expect(addNewProductPage.element('minQtyInput')).toHaveValue(productData.minQty.toString());
+    await expect(addNewProductPage.element('unitPriceInput')).toHaveValue(productData.unitPrice.toString());
+    await expect(addNewProductPage.element('quantityInput')).toHaveValue(productData.quantity.toString());
 
-    // Upload thumbnail image (chọn file đầu tiên từ modal)
-    await addProductPage.uploadThumbnailImage(0);
+    // Upload thumbnail image
+    await addNewProductPage.uploadThumbnailImage(0);
 
     // Save product
-    await addProductPage.savePublish();
-    
-    // Verify success message or redirect
-    await expect(page.locator('.alert-success, .aiz-alert-success, [role="alert"]')).toBeVisible({ timeout: 10000 });
+    await addNewProductPage.savePublish();
+
+    // Verify success
+    await expect(authedPage.locator('.alert-success, .aiz-alert-success, [role="alert"]')).toBeVisible({ timeout: 10000 });
   });
 
-  test('should fill basic product information using schema', async ({ page }) => {
-    const addProductPage = new CMSAddNewProductPage(page);
-    await addProductPage.goto();
-    await addProductPage.expectOnPage();
-
-    // Get product data from schema
+  test('TC_03: Điền thông tin sản phẩm cơ bản (Schema)', async ({ addNewProductPage, authedPage }) => {
     const productData = getTestData('products', 'minimal');
 
-    // Fill basic required fields - dùng bulk fill, category/brand chọn tự động
-    await addProductPage.sections.general.fill({
+    // Fill basic required fields
+    await addNewProductPage.sections.general.fill({
       name: productData.name,
       category: null,
       brand: null,
       unit: productData.unit,
       minQty: productData.minQty,
     });
-    await addProductPage.sections.priceAndStock.fill({
+    await addNewProductPage.sections.priceAndStock.fill({
       unitPrice: productData.unitPrice,
       quantity: productData.quantity,
     });
 
     // Verify fields are filled
-    await expect(addProductPage.element('productNameInput')).toHaveValue(new RegExp(productData.name));
-    await expect(addProductPage.element('unitInput')).toHaveValue(productData.unit);
-    await expect(addProductPage.element('minQtyInput')).toHaveValue(productData.minQty.toString());
-    await expect(addProductPage.element('unitPriceInput')).toHaveValue(productData.unitPrice.toString());
-    await expect(addProductPage.element('quantityInput')).toHaveValue(productData.quantity.toString());
+    await expect(addNewProductPage.element('productNameInput')).toHaveValue(new RegExp(productData.name));
+    await expect(addNewProductPage.element('unitInput')).toHaveValue(productData.unit);
+    await expect(addNewProductPage.element('minQtyInput')).toHaveValue(productData.minQty.toString());
+    await expect(addNewProductPage.element('unitPriceInput')).toHaveValue(productData.unitPrice.toString());
+    await expect(addNewProductPage.element('quantityInput')).toHaveValue(productData.quantity.toString());
 
-    // Upload thumbnail image (chọn file đầu tiên từ modal)
-    await addProductPage.uploadThumbnailImage(0);
+    // Upload thumbnail image
+    await addNewProductPage.uploadThumbnailImage(0);
 
     // Save product
-    await addProductPage.savePublish();
-    
-    // Verify success message or redirect
-    await expect(page.locator('.alert-success, .aiz-alert-success, [role="alert"]')).toBeVisible({ timeout: 10000 });
+    await addNewProductPage.savePublish();
+
+    // Verify success
+    await expect(authedPage.locator('.alert-success, .aiz-alert-success, [role="alert"]')).toBeVisible({ timeout: 10000 });
   });
 
-  test('should fill complete product information using factory', async ({ page }) => {
-    const addProductPage = new CMSAddNewProductPage(page);
-    await addProductPage.goto();
-    await addProductPage.expectOnPage();
-
-    // Generate complete product data using factory
+  test('TC_04: Điền đầy đủ thông tin sản phẩm (Factory)', async ({ addNewProductPage, authedPage }) => {
     const productData = createFullProductInfo();
 
-    // Fill Product Information section (bulk fill)
-    await addProductPage.sections.general.fill({
+    // Fill Product Information section
+    await addNewProductPage.sections.general.fill({
       name: productData.name,
-      category: 'Computer & Accessories', // null = chọn category đầu tiên (ổn định hơn)
-      brand: null, // null = chọn brand đầu tiên (ổn định hơn)
+      category: 'Computer & Accessories',
+      brand: null,
       unit: productData.unit,
       weight: productData.weight,
       minQty: productData.minQty,
@@ -122,8 +163,8 @@ test.describe('CMS Add New Product', () => {
       barcode: productData.barcode,
     });
 
-    // Fill Pricing section (bulk fill)
-    await addProductPage.sections.priceAndStock.fill({
+    // Fill Pricing section
+    await addNewProductPage.sections.priceAndStock.fill({
       unitPrice: productData.unitPrice,
       discount: productData.discount,
       discountType: productData.discountType,
@@ -131,161 +172,148 @@ test.describe('CMS Add New Product', () => {
       sku: productData.sku,
       externalLink: productData.externalLink,
       externalLinkBtn: productData.externalLinkBtn,
-      stockVisibilityState: 'text', // hoặc 'text' hoặc 'hide'
-
+      stockVisibilityState: 'text',
     });
+
     // Fill Description section
     if (productData.description) {
-      await addProductPage.sections.general.fillDescription(productData.description);
+      await addNewProductPage.sections.general.fillDescription(productData.description);
     }
 
-    // Fill SEO section (bulk fill)
-    await addProductPage.sections.seo.fill({
+    // Fill SEO section
+    await addNewProductPage.sections.seo.fill({
       metaTitle: productData.metaTitle,
       metaDescription: productData.metaDescription,
     });
 
-    // Fill Stock section (bulk fill)
-    await addProductPage.sections.priceAndStock.fill({
+    // Fill Stock section
+    await addNewProductPage.sections.priceAndStock.fill({
       lowStockQuantity: productData.lowStockQuantity,
       stockVisibilityState: productData.stockVisibilityState,
     });
 
-    // Fill General section - Status, Tax (bulk fill)
-    await addProductPage.sections.general.fill({
+    // Fill General section - Status, Tax
+    await addNewProductPage.sections.general.fill({
       featured: productData.featured,
       todaysDeal: productData.todaysDeal,
       tax: productData.tax,
       taxType: productData.taxType,
     });
 
-    // Fill Shipping section (bulk fill)
-    await addProductPage.sections.shipping.fill({
+    // Fill Shipping section
+    await addNewProductPage.sections.shipping.fill({
       cashOnDelivery: productData.cashOnDelivery,
       estShippingDays: productData.estShippingDays,
     });
 
-    // Fill Files & Media section (bulk fill)
+    // Fill Files & Media section
     if (productData.videoProvider && productData.videoLink) {
-      await addProductPage.sections.filesAndMedia.fill({
+      await addNewProductPage.sections.filesAndMedia.fill({
         videoProvider: productData.videoProvider,
         videoLink: productData.videoLink,
       });
     }
 
     // Upload images
-    await addProductPage.sections.filesAndMedia.uploadThumbnailImage(0);
-    await addProductPage.sections.filesAndMedia.uploadGalleryImages(0);
-    await addProductPage.sections.filesAndMedia.uploadGalleryImages(1);
+    await addNewProductPage.sections.filesAndMedia.uploadThumbnailImage(0);
+    await addNewProductPage.sections.filesAndMedia.uploadGalleryImages(0);
+    await addNewProductPage.sections.filesAndMedia.uploadGalleryImages(1);
 
     // Verify some key fields
-    await expect(addProductPage.element('productNameInput')).toHaveValue(productData.name);
-    await expect(addProductPage.element('unitPriceInput')).toHaveValue(productData.unitPrice.toString());
-    await expect(addProductPage.element('quantityInput')).toHaveValue(productData.quantity.toString());
+    await expect(addNewProductPage.element('productNameInput')).toHaveValue(productData.name);
+    await expect(addNewProductPage.element('unitPriceInput')).toHaveValue(productData.unitPrice.toString());
+    await expect(addNewProductPage.element('quantityInput')).toHaveValue(productData.quantity.toString());
 
     // Save product
-    await addProductPage.savePublish();
-    
-    // Verify success message or redirect
-    await expect(page.locator('.alert-success, .aiz-alert-success, [role="alert"]')).toBeVisible({ timeout: 10000 });
+    await addNewProductPage.savePublish();
+
+    // Verify success
+    await expect(authedPage.locator('.alert-success, .aiz-alert-success, [role="alert"]')).toBeVisible({ timeout: 10000 });
   });
 
-
-
-  test('should toggle product settings correctly', async ({ page }) => {
-    const addProductPage = new CMSAddNewProductPage(page);
-    await addProductPage.goto();
-    await addProductPage.expectOnPage();
-
-    // Fill basic info
-    await addProductPage.sections.general.fill({
+  test('TC_05: Bật/tắt cài đặt sản phẩm', async ({ addNewProductPage, authedPage }) => {
+    await addNewProductPage.sections.general.fill({
       name: 'Settings Product ' + Date.now(),
       category: null,
       brand: null,
       unit: 'Pc',
       minQty: 1,
     });
-    await addProductPage.sections.priceAndStock.fill({
+    await addNewProductPage.sections.priceAndStock.fill({
       unitPrice: 100.0,
       quantity: 10,
     });
 
     // Toggle various settings
-    await addProductPage.toggleCashOnDelivery(true);
-    await addProductPage.toggleFeatured(true);
-    await addProductPage.toggleTodaysDeal(true);
+    await addNewProductPage.toggleCashOnDelivery(true);
+    await addNewProductPage.toggleFeatured(true);
+    await addNewProductPage.toggleTodaysDeal(true);
 
     // Verify checkboxes are checked
-    await expect(addProductPage.element('cashOnDeliveryCheckbox')).toBeChecked();
-    await expect(addProductPage.element('featuredCheckbox')).toBeChecked();
-    await expect(addProductPage.element('todaysDealCheckbox')).toBeChecked();
+    await expect(addNewProductPage.element('cashOnDeliveryCheckbox')).toBeChecked();
+    await expect(addNewProductPage.element('featuredCheckbox')).toBeChecked();
+    await expect(addNewProductPage.element('todaysDealCheckbox')).toBeChecked();
 
     // Toggle off
-    await addProductPage.toggleFeatured(false);
-    await expect(addProductPage.element('featuredCheckbox')).not.toBeChecked();
+    await addNewProductPage.toggleFeatured(false);
+    await expect(addNewProductPage.element('featuredCheckbox')).not.toBeChecked();
 
     // Upload thumbnail image
-    await addProductPage.sections.filesAndMedia.uploadThumbnailImage(0);
+    await addNewProductPage.sections.filesAndMedia.uploadThumbnailImage(0);
 
     // Save product
-    await addProductPage.savePublish();
-    
-    // Verify success message or redirect
-    await expect(page.locator('.alert-success, .aiz-alert-success, [role="alert"]')).toBeVisible({ timeout: 10000 });
+    await addNewProductPage.savePublish();
+
+    // Verify success
+    await expect(authedPage.locator('.alert-success, .aiz-alert-success, [role="alert"]')).toBeVisible({ timeout: 10000 });
   });
 
-  test('should handle discount and tax configuration using factory', async ({ page }) => {
-    const addProductPage = new CMSAddNewProductPage(page);
-    await addProductPage.goto();
-    await addProductPage.expectOnPage();
-
-    // Generate product with discount using factory
+  test('TC_06: Cấu hình giảm giá và thuế (Factory)', async ({ addNewProductPage, authedPage }) => {
     const productData = createProductWithDiscount({
       tax: 10,
       taxType: 'Percent',
     });
 
-    // Fill basic info - không chỉ định category/brand, sẽ chọn đầu tiên
-    await addProductPage.sections.general.fill({
+    // Fill basic info
+    await addNewProductPage.sections.general.fill({
       name: productData.name,
       category: null,
       brand: null,
       unit: productData.unit,
       minQty: productData.minQty,
     });
-    await addProductPage.sections.priceAndStock.fill({
+    await addNewProductPage.sections.priceAndStock.fill({
       unitPrice: productData.unitPrice,
       quantity: productData.quantity,
     });
 
     // Configure discount
-    await addProductPage.sections.priceAndStock.fill({
+    await addNewProductPage.sections.priceAndStock.fill({
       discount: productData.discount,
       discountType: productData.discountType,
     });
 
     // Configure tax
-    await addProductPage.sections.general.fill({
+    await addNewProductPage.sections.general.fill({
       tax: productData.tax,
       taxType: productData.taxType,
     });
 
     // Verify discount and tax
     if (productData.discount) {
-      await expect(addProductPage.element('discountInput')).toHaveValue(productData.discount.toString());
+      await expect(addNewProductPage.element('discountInput')).toHaveValue(productData.discount.toString());
     }
     if (productData.tax) {
-      await expect(addProductPage.element('taxInput')).toHaveValue(productData.tax.toString());
+      await expect(addNewProductPage.element('taxInput')).toHaveValue(productData.tax.toString());
     }
 
     // Upload thumbnail image
-    await addProductPage.sections.filesAndMedia.uploadThumbnailImage(0);
+    await addNewProductPage.sections.filesAndMedia.uploadThumbnailImage(0);
 
     // Save product
-    await addProductPage.savePublish();
-    
-    // Verify success message or redirect
-    await expect(page.locator('.alert-success, .aiz-alert-success, [role="alert"]')).toBeVisible({ timeout: 10000 });
+    await addNewProductPage.savePublish();
+
+    // Verify success
+    await expect(authedPage.locator('.alert-success, .aiz-alert-success, [role="alert"]')).toBeVisible({ timeout: 10000 });
   });
 });
-
