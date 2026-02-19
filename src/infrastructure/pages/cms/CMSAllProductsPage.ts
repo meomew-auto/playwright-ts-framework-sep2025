@@ -51,6 +51,19 @@ export type ProductColumnKey =
   | 'options';      // Options (View, Edit, Duplicate, Delete)
 
 /**
+ * Trick `string & {}` giữ IntelliSense autocomplete cho ProductColumnKey
+ * mà vẫn chấp nhận string bất kỳ.
+ * Dùng cho tham số đơn: columnKey, columnKeys[]
+ */
+type ColumnKey = ProductColumnKey | (string & {});
+
+/**
+ * Partial Record cho filters — cho phép truyền 1 vài key thay vì tất cả.
+ * Ví dụ: `{ name: 'Product X' }` thay vì phải truyền đủ 9 key.
+ */
+type ColumnFilters = Partial<Record<ProductColumnKey, TextMatcher>> & Record<string, TextMatcher>;
+
+/**
  * Danh sách cột mặc định để lấy data từ bảng
  */
 export const DEFAULT_PRODUCT_TABLE_COLUMNS: ProductColumnKey[] = [
@@ -75,9 +88,11 @@ export class CMSAllProductsPage extends BasePage {
     pageTitle: (page: Page) =>
       page.locator('.aiz-titlebar h1, .aiz-titlebar h2, .aiz-titlebar h3').filter({ hasText: 'All products' }),
     addNewProductButton: 'a.btn-circle.btn-info',
-    productsTable: '.table.aiz-table',
-    tableHeaders: '.table.aiz-table thead th',
-    tableRows: '.table.aiz-table tbody tr',
+    // ⚠️ :not(.footable-details) — Footable tạo thêm <table class="footable-details table aiz-table">
+    // bên trong expanded row → gây strict mode violation nếu không loại trừ.
+    productsTable: '.table.aiz-table:not(.footable-details)',
+    tableHeaders: '.table.aiz-table:not(.footable-details) thead th',
+    tableRows: '.table.aiz-table:not(.footable-details) tbody tr',
     searchInput: '#search',
     sellerSelect: 'select#user_id',
     sellerSelectButton: (page: Page) => page.locator('button[data-id="user_id"]'),
@@ -96,8 +111,28 @@ export class CMSAllProductsPage extends BasePage {
   // ──────────────────────────────────────────────────────────
   // 🔹 MOBILE OVERRIDES: Locators khác biệt trên mobile
   // ──────────────────────────────────────────────────────────
+  //
+  // 📘 TẠI SAO CẦN OVERRIDE tableRows TRÊN MOBILE?
+  //
+  // Desktop: mỗi <tr> trong <tbody> = 1 sản phẩm → locator 'tbody tr' OK.
+  //
+  // Mobile (Footable): khi expand dòng, Footable CHÈN THÊM 1 <tr> chứa
+  // detail ngay bên dưới main row:
+  //
+  //   <tbody>
+  //     <tr class="footable-visible">...</tr>           ← main row (SP 1)
+  //     <tr class="footable-detail-row">...</tr>        ← ⚠️ detail row (Footable tạo)
+  //     <tr class="footable-visible">...</tr>           ← main row (SP 2)
+  //   </tbody>
+  //
+  // Nếu dùng 'tbody tr' trên mobile → bắt cả detail rows → sai số lượng:
+  //   getRowCount()         → 3 thay vì 2
+  //   getColumnValues()     → trả thêm giá trị rác từ detail row
+  //   findRowByColumnValue() → có thể match nhầm detail row
+  //
+  // Fix: dùng :not(.footable-detail-row) để chỉ bắt main rows.
+  //
   private readonly mobileOverrides = {
-    // Mobile: Loại bỏ các row mở rộng của footable (expanded detail rows)
     tableRows: '.table.aiz-table tbody tr:not(.footable-detail-row)',
     // Thêm các mobile-specific overrides khác ở đây khi cần
   } as const;
@@ -182,16 +217,38 @@ export class CMSAllProductsPage extends BasePage {
   // 📍 NAVIGATION & PAGE VERIFICATION
   // ═══════════════════════════════════════════════════════════
 
+  /**
+   * Điều hướng đến trang All Products.
+   */
   async goto() {
     await this.navigateTo('/admin/products/all');
   }
 
+  /**
+   * Verify trang All Products đã load hoàn tất.
+   *
+   * ⚠️ LƯU Ý QUAN TRỌNG: table visible ≠ rows loaded
+   * ────────────────────────────────────────────────────
+   * CMS render table structure (thead) TRƯỚC khi data rows (tbody tr) load.
+   * Nếu chỉ check `productsTable.toBeVisible()` → fixture trả page object
+   * → test gọi getFirstProductName() → tbody chưa có rows → trả "" → fail.
+   *
+   * Hiện tượng: chạy từng TC thì pass, chạy serial thì TC đầu fail.
+   * Nguyên nhân: serial = liên tục navigate → server chậm hơn → rows load chậm.
+   *
+   * Fix: thêm `tableRows.first().toBeVisible()` = đợi ít nhất 1 row data render.
+   */
   async expectOnPage(): Promise<void> {
     await expect(this.page).toHaveURL(/\/admin\/products\/all/);
     await expect(this.getLocator('pageTitle')).toBeVisible();
     await expect(this.getLocator('productsTable')).toBeVisible();
+    // Đợi ít nhất 1 row data load — table visible ≠ rows loaded
+    await expect(this.getLocator('tableRows').first()).toBeVisible();
   }
 
+  /**
+   * Click nút "Add New Product" để chuyển sang trang tạo sản phẩm mới.
+   */
   async clickAddNewProduct() {
     await this.clickWithLog(this.getLocator('addNewProductButton'));
   }
@@ -201,9 +258,15 @@ export class CMSAllProductsPage extends BasePage {
   // ═══════════════════════════════════════════════════════════
 
   /**
-   * Đợi bảng load xong với nhiều checks để đảm bảo chắc chắn
+   * Đợi bảng load xong với nhiều checks để đảm bảo chắc chắn.
+   *
+   * ⚠️ Khi chạy parallel (14 workers), server CMS bị quá tải →
+   * response chậm hơn bình thường → cần timeout dài hơn cho rows.
    */
   async waitForTableReady() {
+    // 0. Đợi network ổn định — tránh check DOM khi server chưa trả data xong
+    await this.page.waitForLoadState('networkidle');
+
     const table = this.getLocator('productsTable');
 
     // 1. Table visible
@@ -214,12 +277,13 @@ export class CMSAllProductsPage extends BasePage {
     await expect(headers.first()).toBeVisible({ timeout: 5000 });
 
     // 3. Ít nhất 1 row visible (name cell là indicator chính)
+    //    Timeout 15s vì parallel run → server chậm → tbody có thể trống lâu
     const rows = this.getRowsLocator();
-    await expect(rows.first()).toBeVisible({ timeout: 5000 });
+    await expect(rows.first()).toBeVisible({ timeout: 15000 });
 
     const firstRow = rows.first();
     const nameCell = firstRow.locator('td').nth(1);
-    await expect(nameCell).toBeVisible({ timeout: 5000 });
+    await expect(nameCell).toBeVisible({ timeout: 15000 });
   }
 
   /**
@@ -253,21 +317,33 @@ export class CMSAllProductsPage extends BasePage {
   // 📍 TABLE DATA EXTRACTION - Lấy dữ liệu từ bảng
   // ═══════════════════════════════════════════════════════════
 
+  /**
+   * Lấy locator cho tất cả rows trong bảng (trừ detail rows của Footable).
+   */
   private getRowsLocator(): Locator {
     return this.getLocator('tableRows');
   }
 
+  /**
+   * Đếm số dòng hiện tại trong bảng.
+   * Đợi table ready trước khi đếm để tránh race condition.
+   */
   async getRowCount(): Promise<number> {
     await this.waitForTableReady();
     return this.getRowsLocator().count();
   }
 
   /**
-   * Lấy tất cả giá trị của một cột
+   * Lấy tất cả giá trị của một cột.
+   *
    */
-  async getColumnValues(columnKey: ProductColumnKey | string): Promise<string[]> {
+  async getColumnValues(columnKey: ColumnKey): Promise<string[]> {
     await this.ensureCollectionHelper();
     const rows = this.getRowsLocator();
+    
+    // Đợi rows ổn định trước khi đếm
+    await expect(rows.first()).toBeVisible({ timeout: 10000 });
+    
     const count = await rows.count();
     const values: string[] = [];
 
@@ -278,12 +354,19 @@ export class CMSAllProductsPage extends BasePage {
   }
 
   /**
-   * Lấy dữ liệu của nhiều cột từ bảng
+   * Lấy dữ liệu của nhiều cột từ bảng.
+   *
    */
-  async getTableData(columnKeys: Array<ProductColumnKey | string>): Promise<Array<Record<string, string>>> {
+  async getTableData(columnKeys: ColumnKey[]): Promise<Array<Record<string, string>>> {
     await this.ensureCollectionHelper();
     const rows = this.getRowsLocator();
+    
+    // Đợi rows ổn định trước khi đếm — tránh race condition khi table re-render
+    await expect(rows.first()).toBeVisible({ timeout: 10000 });
+    
     const count = await rows.count();
+    Logger.info(`${this.logPrefix}📊 Table rows count: ${count}`);
+    
     const result: Array<Record<string, string>> = [];
 
     for (let i = 0; i < count; i++) {
@@ -312,7 +395,7 @@ export class CMSAllProductsPage extends BasePage {
    * Tìm row đầu tiên khớp với giá trị cột
    */
   async findRowByColumnValue(
-    columnKey: ProductColumnKey | string,
+    columnKey: ColumnKey,
     matcher: TextMatcher
   ): Promise<Locator> {
     const helper = await this.ensureCollectionHelper();
@@ -328,7 +411,7 @@ export class CMSAllProductsPage extends BasePage {
    * Tìm row đầu tiên khớp với filters (chỉ tìm trong trang hiện tại)
    */
   async findRowByFilters(
-    filters: Record<ProductColumnKey | string, TextMatcher>
+    filters: ColumnFilters
   ): Promise<Locator> {
     const helper = await this.ensureCollectionHelper();
     return helper.findItemByFilters(
@@ -343,7 +426,7 @@ export class CMSAllProductsPage extends BasePage {
    */
   private async getRowDataForItem(
     row: Locator,
-    columnKeys: Array<ProductColumnKey | string>,
+    columnKeys: ColumnKey[],
   ): Promise<Record<string, string>> {
     const data: Record<string, string> = {};
     for (const key of columnKeys) {
@@ -356,8 +439,8 @@ export class CMSAllProductsPage extends BasePage {
    * Lấy dữ liệu của row khớp với filters
    */
   async getRowDataByFilters(
-    filters: Record<ProductColumnKey | string, TextMatcher>,
-    columnKeys?: Array<ProductColumnKey | string>
+    filters: ColumnFilters,
+    columnKeys?: ColumnKey[]
   ): Promise<Record<string, string>> {
     const row = await this.findRowByFilters(filters);
     return this.getRowDataForItem(
@@ -367,7 +450,8 @@ export class CMSAllProductsPage extends BasePage {
   }
 
   /**
-   * Pagination helper: go to next page
+   * Helper nội bộ: Chuyển sang trang tiếp theo.
+   * @returns `true` nếu chuyển trang thành công, `false` nếu đã ở trang cuối.
    */
   private async goToNextPageHelper(): Promise<boolean> {
     const nextButton = this.getLocator('paginationNext');
@@ -383,7 +467,8 @@ export class CMSAllProductsPage extends BasePage {
   }
 
   /**
-   * Pagination helper: get max pages
+   * Helper nội bộ: Tính tổng số trang từ pagination UI.
+   * Đọc text của từng page link rồi lấy số lớn nhất.
    */
   private async getMaxPagesHelper(): Promise<number> {
     const pagination = this.getLocator('paginationContainer');
@@ -415,7 +500,7 @@ export class CMSAllProductsPage extends BasePage {
    * @returns { row, pageNumber } — row Locator + trang tìm thấy
    */
   async findRowByFiltersAcrossPages(
-    filters: Record<ProductColumnKey | string, TextMatcher>,
+    filters: ColumnFilters,
     options?: { maxPages?: number }
   ): Promise<{ row: Locator; pageNumber: number }> {
     const helper = await this.ensureCollectionHelper();
@@ -437,9 +522,9 @@ export class CMSAllProductsPage extends BasePage {
    * @returns { data, pageNumber } — row data + trang tìm thấy
    */
   async getRowDataByFiltersAcrossPages(
-    filters: Record<ProductColumnKey | string, TextMatcher>,
+    filters: ColumnFilters,
     options?: { maxPages?: number },
-    columnKeys?: Array<ProductColumnKey | string>
+    columnKeys?: ColumnKey[]
   ): Promise<{ data: Record<string, string>; pageNumber: number }> {
     const { row, pageNumber } = await this.findRowByFiltersAcrossPages(filters, options);
     const data = await this.getRowDataForItem(
@@ -453,6 +538,12 @@ export class CMSAllProductsPage extends BasePage {
   // 📍 TABLE ROW ACTIONS - Thao tác trên row
   // ═══════════════════════════════════════════════════════════
 
+  /**
+   * Click action button trên row (View/Edit/Duplicate/Delete).
+   * Hover vào row để hiện action buttons, rồi click button tương ứng.
+   * @param productNameMatcher - Tên sản phẩm để tìm row
+   * @param action - Loại action cần click
+   */
   async clickRowAction(productNameMatcher: TextMatcher, action: 'View' | 'Edit' | 'Duplicate' | 'Delete') {
     const row = await this.findRowByColumnValue('name', productNameMatcher);
     await row.scrollIntoViewIfNeeded();
@@ -463,27 +554,46 @@ export class CMSAllProductsPage extends BasePage {
     await this.clickWithLog(actionButton);
   }
 
+  /**
+   * Mở trang xem chi tiết sản phẩm.
+   * @param productNameMatcher - Tên sản phẩm cần xem
+   */
   async viewProduct(productNameMatcher: TextMatcher) {
     await this.clickRowAction(productNameMatcher, 'View');
   }
 
+  /**
+   * Mở trang chỉnh sửa sản phẩm.
+   * @param productNameMatcher - Tên sản phẩm cần sửa
+   */
   async editProduct(productNameMatcher: TextMatcher) {
     await this.clickRowAction(productNameMatcher, 'Edit');
   }
 
+  /**
+   * Nhân bản sản phẩm (tạo bản copy).
+   * @param productNameMatcher - Tên sản phẩm cần nhân bản
+   */
   async duplicateProduct(productNameMatcher: TextMatcher) {
     await this.clickRowAction(productNameMatcher, 'Duplicate');
   }
 
+  /**
+   * Xóa một sản phẩm và xác nhận dialog.
+   *
+   * Sau khi click Delete, CMS hiện confirm dialog (SweetAlert2 hoặc Bootstrap modal).
+   * Hàm tự động tìm và click nút confirm, rồi đợi trang reload.
+   *
+   * @param productNameMatcher - Tên sản phẩm cần xóa
+   */
   async deleteProduct(productNameMatcher: TextMatcher) {
     await this.clickRowAction(productNameMatcher, 'Delete');
     
-    // Handle confirm dialog - có thể là SweetAlert2 hoặc Bootstrap modal
-    // Đợi dialog xuất hiện
+    // Đợi confirm dialog xuất hiện (có thể là SweetAlert2 hoặc Bootstrap modal)
     const dialog = this.page.locator('.swal2-popup, .modal.show, [role="dialog"]').first();
-    await this.expectVisible(dialog, '[deleteProduct] Delete confirmation dialog', 5000);
+    await this.expectVisible(dialog, '[deleteProduct] Confirm dialog', 5000);
     
-    // Tìm button confirm - thử nhiều locator
+    // Tìm nút xác nhận — thử nhiều locator vì CMS dùng khác nhau tùy context
     const confirmButton = dialog.locator(
       'button:has-text("Delete"), ' +
       'button:has-text("OK"), ' +
@@ -494,86 +604,88 @@ export class CMSAllProductsPage extends BasePage {
       'a.btn-danger'
     ).first();
     
-    await this.expectVisible(confirmButton, '[deleteProduct] Delete confirm button', 3000);
+    await this.expectVisible(confirmButton, '[deleteProduct] Nút xác nhận xóa', 3000);
     await this.clickWithLog(confirmButton);
     
-    // Đợi dialog đóng
-    await this.expectHidden(dialog, '[deleteProduct] Delete confirmation dialog', 10000);
-    
-    // Đợi delete hoàn thành
-    await this.page.waitForTimeout(1000);
+    // Trang reload hoàn toàn sau khi xóa (server-side delete)
+    // → Không dùng expectHidden(dialog) vì DOM context cũ bị destroy
+    await this.page.waitForLoadState('networkidle');
+    await this.waitForTableReady();
   }
 
+  /**
+   * Bật/tắt checkbox của một sản phẩm theo tên.
+   *
+   * Click vào `span.aiz-square-check` thay vì `input` trực tiếp
+   * vì span hoạt động tốt hơn trên responsive layout.
+   *
+   * @param productNameMatcher - Tên sản phẩm
+   * @param checked - `true` để check, `false` để uncheck
+   */
   async toggleRowCheckboxByName(productNameMatcher: TextMatcher, checked: boolean) {
     const row = await this.findRowByColumnValue('name', productNameMatcher);
     await row.scrollIntoViewIfNeeded();
     await row.hover();
     
-    // Tìm checkbox input trong row - checkbox nằm trong cột đầu tiên (td đầu tiên)
-    // Cấu trúc: <tr><td><div><label><input class="check-one"><span class="aiz-square-check"></span></label></div></td>...
+    // Checkbox nằm trong cột đầu tiên: <td><div><label><input class="check-one"><span>...</span></label></div></td>
     const checkbox = row.locator('td').first().locator('input[type="checkbox"].check-one').first();
-    
-    // Verify checkbox tồn tại và visible
     await this.expectVisible(checkbox, '[toggleRowCheckboxByName] Checkbox');
     
-    // Kiểm tra trạng thái hiện tại
     const isCurrentlyChecked = await checkbox.isChecked().catch(() => false);
     
     if (checked && !isCurrentlyChecked) {
-      // Click vào span.aiz-square-check thay vì input trực tiếp (hoạt động tốt hơn khi responsive)
       const checkboxSpan = row.locator('td').first().locator('span.aiz-square-check').first();
       await this.expectVisible(checkboxSpan, '[toggleRowCheckboxByName] Checkbox span');
       await this.clickWithLog(checkboxSpan);
-      
-      // Verify đã check thành công
       await expect(checkbox).toBeChecked({ timeout: 2000 });
     } else if (!checked && isCurrentlyChecked) {
-      // Uncheck cũng click vào span
       const checkboxSpan = row.locator('td').first().locator('span.aiz-square-check').first();
       await this.expectVisible(checkboxSpan, '[toggleRowCheckboxByName] Checkbox span');
       await this.clickWithLog(checkboxSpan);
-      
-      // Verify đã uncheck
       await expect(checkbox).not.toBeChecked({ timeout: 2000 });
     }
   }
 
   /**
-   * Select multiple products by names và thực hiện bulk delete
-   * @param productNameMatchers - Mảng các tên sản phẩm cần delete
+   * Chọn nhiều sản phẩm theo tên rồi xóa hàng loạt (Bulk Delete).
+   *
+   * Quy trình: Check từng checkbox → Click "Bulk Action" → Click "Delete"
+   * → Xác nhận modal → Đợi xóa xong → Reload table.
+   *
+   * @param productNameMatchers - Mảng tên sản phẩm cần xóa
    */
   async bulkDeleteProducts(productNameMatchers: TextMatcher[]) {
     await this.waitForTableReady();
     
-    // Step 1: Select tất cả products
-    console.log(`[Bulk Delete] Selecting ${productNameMatchers.length} products...`);
+    // Bước 1: Check checkbox từng sản phẩm
+    Logger.info(`🗑️ [bulkDelete] Chọn ${productNameMatchers.length} sản phẩm...`);
     for (const nameMatcher of productNameMatchers) {
       await this.toggleRowCheckboxByName(nameMatcher, true);
     }
     
-    // Step 2: Click Bulk Action button
+    // Bước 2: Mở menu Bulk Action
     const bulkActionButton = this.getLocator('bulkActionButton');
     await this.clickWithLog(bulkActionButton);
     await this.page.waitForTimeout(300);
     
-    // Step 3: Click "Delete selection"
+    // Bước 3: Click "Delete selection"
     const bulkDeleteMenuItem = this.getLocator('bulkDeleteMenuItem');
     await expect(bulkDeleteMenuItem).toBeVisible();
     await this.clickWithLog(bulkDeleteMenuItem);
     
-    // Step 4: Wait for modal và confirm
+    // Bước 4: Xác nhận dialog
     const bulkDeleteModal = this.getLocator('bulkDeleteModal');
-    await this.expectVisible(bulkDeleteModal, '[bulkDeleteProducts] Bulk delete modal');
+    await this.expectVisible(bulkDeleteModal, '[bulkDelete] Modal xác nhận');
     
     const confirmButton = this.getLocator('bulkDeleteConfirmButton');
-    await this.expectVisible(confirmButton, '[bulkDeleteProducts] Delete confirm button');
+    await this.expectVisible(confirmButton, '[bulkDelete] Nút xác nhận');
     await this.clickWithLog(confirmButton);
     
-    // Step 5: Wait for delete to complete (modal sẽ đóng sau khi delete)
-    await this.expectHidden(bulkDeleteModal, '[bulkDeleteProducts] Bulk delete modal', 10000);
+    // Bước 5: Đợi xóa xong (modal đóng) → reload table
+    await this.expectHidden(bulkDeleteModal, '[bulkDelete] Modal xác nhận', 10000);
     await this.waitForTableReady();
     
-    // Clear cache sau khi delete
+    // Clear cache sau khi xóa
     this.resetCollectionCache();
   }
 
@@ -581,35 +693,68 @@ export class CMSAllProductsPage extends BasePage {
   // 📍 TABLE FILTERS & PAGINATION
   // ═══════════════════════════════════════════════════════════
 
+  /**
+   * Tìm kiếm sản phẩm bằng từ khóa.
+   * Nhập text vào ô search → Enter → đợi table reload.
+   * @param term - Từ khóa tìm kiếm (string rỗng để xóa filter)
+   */
   async search(term: string) {
     const searchInput = this.getLocator('searchInput');
     await searchInput.fill(term);
     await this.page.keyboard.press('Enter');
     await this.waitForTableReady();
-    // Clear cache khi search để rebuild với data mới
     this.resetCollectionCache();
   }
 
+  /**
+   * Xóa bộ lọc tìm kiếm (search rỗng).
+   */
   async clearSearch() {
     await this.search('');
   }
 
+  /**
+   * Lọc bảng theo seller.
+   *
+   * ⚠️ Dùng native `<select>` thay vì bootstrap-select button vì plugin
+   * destroy/recreate button DOM khi init → gây "Element not attached to DOM".
+   * `selectOption()` tương tác trực tiếp với `<select id="user_id">` (ổn định).
+   * Sau đó dispatch 'change' event để trigger CMS form submit.
+   *
+   * @param sellerName - Tên seller cần lọc (text hiển thị trên option)
+   */
   async selectSeller(sellerName: string) {
-    const selectButton = this.getLocator('sellerSelectButton');
-    await this.helpers.selectBootstrapOption(selectButton, sellerName);
-    await this.waitForTableReady();
-    this.resetCollectionCache();
-  }
-
-  async selectSort(sortOption: string) {
-    const selectButton = this.getLocator('sortSelectButton');
-    await this.helpers.selectBootstrapOption(selectButton, sortOption);
-    // Đợi page reload xong sau khi sort (tránh đọc data giữa lúc re-render)
+    const nativeSelect = this.getLocator('sellerSelect');
+    await nativeSelect.selectOption({ label: sellerName });
+    await nativeSelect.dispatchEvent('change');
     await this.page.waitForLoadState('networkidle');
     await this.waitForTableReady();
     this.resetCollectionCache();
   }
 
+  /**
+   * Sắp xếp bảng theo tiêu chí.
+   *
+   * ⚠️ Dùng native `<select>` thay vì bootstrap-select button vì plugin
+   * destroy/recreate button DOM khi init → gây "Element not attached to DOM".
+   * `selectOption()` tương tác trực tiếp với `<select id="type">` (ổn định).
+   * Sau đó dispatch 'change' event để trigger CMS form submit.
+   *
+   * @param sortOption - Tùy chọn sắp xếp (text hiển thị trên option)
+   */
+  async selectSort(sortOption: string) {
+    const nativeSelect = this.getLocator('sortSelect');
+    await nativeSelect.selectOption({ label: sortOption });
+    await nativeSelect.dispatchEvent('change');
+    await this.page.waitForLoadState('networkidle');
+    await this.waitForTableReady();
+    this.resetCollectionCache();
+  }
+
+  /**
+   * Chuyển đến trang cụ thể trong pagination.
+   * @param pageNumber - Số trang cần chuyển đến
+   */
   async goToPage(pageNumber: number) {
     const pageLink = this.getLocator('paginationPageLink')(pageNumber);
     await this.clickWithLog(pageLink);
@@ -617,10 +762,14 @@ export class CMSAllProductsPage extends BasePage {
     this.resetCollectionCache();
   }
 
+  /**
+   * Chuyển sang trang tiếp theo.
+   * Throw error nếu đã ở trang cuối.
+   */
   async goToNextPage() {
     const didNavigate = await this.goToNextPageHelper();
     if (!didNavigate) {
-      throw new Error('Next page is not available');
+      throw new Error('Đã ở trang cuối — không thể chuyển trang tiếp');
     }
   }
 
@@ -628,6 +777,10 @@ export class CMSAllProductsPage extends BasePage {
   // 📍 HELPER METHODS
   // ═══════════════════════════════════════════════════════════
 
+  /**
+   * Lấy tên sản phẩm đầu tiên trong bảng (bỏ qua giá trị rỗng).
+   * Thường dùng làm target cho test expand/collapse.
+   */
   async getFirstProductName(): Promise<string> {
     const values = await this.getColumnValues('name');
     const firstNonEmpty = values.find((value) => value.trim().length > 0);
@@ -659,131 +812,178 @@ export class CMSAllProductsPage extends BasePage {
   }
 
   // ═══════════════════════════════════════════════════════════
-  // 📱 MOBILE FOOTABLE METHODS - Expand/Collapse row details
+  // 📱 MOBILE FOOTABLE — Mở rộng/Thu gọn chi tiết dòng
   // ═══════════════════════════════════════════════════════════
+  //
+  // Footable là responsive table plugin của CMS:
+  // - Desktop: tất cả cột hiển thị bình thường trong <thead>/<tbody>
+  // - Mobile: ẩn các cột "ít quan trọng" → chỉ giữ cột 'name'
+  //   → User click icon (+/-) để mở rộng dòng → hiện detail row
+  //   → Detail row là <tr class="footable-detail-row"> chứa nested table
+  //
+  // DOM Structure khi expand:
+  // ┌─────────────────────────────────────────────────────────┐
+  // │ <tr class="footable-visible">                          │ ← main row
+  // │   <td class="footable-first-visible">                  │
+  // │     <span class="footable-toggle fooicon-minus"/>      │ ← toggle icon
+  // │   </td>                                                │
+  // │   <td>Product Name</td>                                │
+  // │ </tr>                                                  │
+  // │ <tr class="footable-detail-row">                       │ ← detail row
+  // │   <td colspan="N">                                     │
+  // │     <table class="footable-details">                   │
+  // │       <tbody>                                          │
+  // │         <tr><th>Added By</th><td>Admin</td></tr>       │
+  // │         <tr><th>Total Stock</th><td>100</td></tr>      │
+  // │       </tbody>                                         │
+  // │     </table>                                           │
+  // │   </td>                                                │
+  // │ </tr>                                                  │
+  // └─────────────────────────────────────────────────────────┘
 
   /**
-   * Check if current viewport is mobile (based on viewportType)
+   * Kiểm tra viewport hiện tại có phải mobile không.
+   * Dựa vào viewportType được inject từ fixture (desktop | mobile).
    */
   isMobileViewport(): boolean {
     return this.viewportType === 'mobile';
   }
 
   /**
-   * Expand a row to show footable details (mobile only)
-   * @param row - Locator of the row to expand
+   * Mở rộng dòng để hiện chi tiết (chỉ dùng trên mobile).
+   *
+   * Footable ẩn các cột trên mobile → click icon (+) để mở rộng.
+   * Toggle icon classes:
+   * - fooicon-plus  = đang thu gọn → click để mở
+   * - fooicon-minus = đang mở rộng → không cần click
+   *
+   * @param row - Locator của dòng cần mở rộng (main row, KHÔNG phải detail row)
    */
   async expandRow(row: Locator): Promise<void> {
     if (!this.isMobileViewport()) {
-      console.log('[expandRow] Not on mobile viewport, skipping expand');
+      Logger.info('📱 [expandRow] Không phải mobile viewport — bỏ qua');
       return;
     }
 
-    // Find the first visible cell which contains the toggle icon
+    // Đợi Footable init xong — Footable JS cần thời gian để thêm class
+    // "footable-first-visible" vào <td> đầu tiên. Nếu check ngay lập tức
+    // sau pageload, class có thể chưa tồn tại → cần wait với timeout.
     const toggleCell = row.locator('td.footable-first-visible').first();
-    const toggleCellExists = await toggleCell.count() > 0;
-    
-    if (!toggleCellExists) {
-      console.log('[expandRow] No footable-first-visible cell found, skipping');
+    try {
+      await expect(toggleCell).toBeVisible({ timeout: 5000 });
+    } catch {
+      Logger.info('📱 [expandRow] Không tìm thấy cell footable-first-visible sau 5s — bỏ qua');
       return;
     }
 
-    // Find the toggle icon (span) inside the cell
+    // Tìm toggle icon (span) trong cell
     const toggleIcon = toggleCell.locator('span.footable-toggle').first();
     const toggleExists = await toggleIcon.count() > 0;
-    
+
     if (!toggleExists) {
-      console.log('[expandRow] No footable-toggle icon found, skipping');
+      Logger.info('📱 [expandRow] Không tìm thấy icon footable-toggle — bỏ qua');
       return;
     }
 
-    // Check if already expanded (icon has fooicon-minus class when expanded)
-    const isExpanded = await toggleIcon.evaluate((el) => 
+    // Kiểm tra đã mở rộng chưa (fooicon-minus = đang mở)
+    const isExpanded = await toggleIcon.evaluate((el) =>
       el.classList.contains('fooicon-minus')
     );
 
     if (isExpanded) {
-      console.log('[expandRow] Row already expanded');
+      Logger.info('📱 [expandRow] Dòng đã mở rộng — bỏ qua');
       return;
     }
 
-    // Click to expand
+    // Click để mở rộng
     await this.clickWithLog(toggleIcon);
-    
-    // Wait for detail row to appear
+
+    // Đợi detail row xuất hiện (sibling tiếp theo của main row)
     const detailRow = row.locator('+ tr.footable-detail-row');
     await expect(detailRow).toBeVisible({ timeout: 3000 });
-    console.log('[expandRow] Row expanded successfully');
+    Logger.info('📱 [expandRow] ✅ Đã mở rộng dòng thành công');
   }
 
   /**
-   * Collapse a row to hide footable details (mobile only)
-   * @param row - Locator of the row to collapse
+   * Thu gọn dòng để ẩn chi tiết (chỉ dùng trên mobile).
+   *
+   * Ngược lại với expandRow():
+   * - fooicon-plus  = đã thu gọn → không cần click
+   * - fooicon-minus = đang mở → click để thu gọn
+   *
+   * @param row - Locator của dòng cần thu gọn (main row)
    */
   async collapseRow(row: Locator): Promise<void> {
     if (!this.isMobileViewport()) {
-      console.log('[collapseRow] Not on mobile viewport, skipping collapse');
+      Logger.info('📱 [collapseRow] Không phải mobile viewport — bỏ qua');
       return;
     }
 
-    // Find the first visible cell which contains the toggle icon
+    // Tìm cell đầu tiên chứa toggle icon
     const toggleCell = row.locator('td.footable-first-visible').first();
     const toggleCellExists = await toggleCell.count() > 0;
-    
+
     if (!toggleCellExists) {
-      console.log('[collapseRow] No footable-first-visible cell found, skipping');
+      Logger.info('📱 [collapseRow] Không tìm thấy cell footable-first-visible — bỏ qua');
       return;
     }
 
-    // Find the toggle icon (span) inside the cell
+    // Tìm toggle icon trong cell
     const toggleIcon = toggleCell.locator('span.footable-toggle').first();
     const toggleExists = await toggleIcon.count() > 0;
-    
+
     if (!toggleExists) {
-      console.log('[collapseRow] No footable-toggle icon found, skipping');
+      Logger.info('📱 [collapseRow] Không tìm thấy icon footable-toggle — bỏ qua');
       return;
     }
 
-    // Check if already collapsed (icon has fooicon-plus class when collapsed)
-    const isCollapsed = await toggleIcon.evaluate((el) => 
+    // Kiểm tra đã thu gọn chưa (fooicon-plus = đã gọn)
+    const isCollapsed = await toggleIcon.evaluate((el) =>
       el.classList.contains('fooicon-plus')
     );
 
     if (isCollapsed) {
-      console.log('[collapseRow] Row already collapsed');
+      Logger.info('📱 [collapseRow] Dòng đã thu gọn — bỏ qua');
       return;
     }
 
-    // Click to collapse
+    // Click để thu gọn
     await this.clickWithLog(toggleIcon);
-    
-    // Wait for detail row to disappear
+
+    // Đợi detail row biến mất
     const detailRow = row.locator('+ tr.footable-detail-row');
     await expect(detailRow).toBeHidden({ timeout: 3000 });
-    console.log('[collapseRow] Row collapsed successfully');
+    Logger.info('📱 [collapseRow] ✅ Đã thu gọn dòng thành công');
   }
 
   /**
-   * Get data from expanded footable detail row (mobile only)
-   * @param row - The main row (not the detail row)
-   * @returns Object with detail data
+   * Đọc dữ liệu từ detail row đã mở rộng (chỉ dùng trên mobile).
+   *
+   * Detail row chứa nested table (<table class="footable-details">)
+   * với các dòng <tr><th>Key</th><td>Value</td></tr>.
+   *
+   * ⚠️ PHẢI gọi expandRow() TRƯỚC khi gọi method này.
+   * Nếu detail row chưa visible → throw Error.
+   *
+   * @param row - Locator của main row (KHÔNG phải detail row)
+   * @returns Object key-value: { 'Added By': 'Admin', 'Total Stock': '100', ... }
    */
   async getExpandedRowData(row: Locator): Promise<Record<string, string>> {
     if (!this.isMobileViewport()) {
-      throw new Error('[getExpandedRowData] Only available on mobile viewport');
+      throw new Error('[getExpandedRowData] Chỉ dùng được trên mobile viewport');
     }
 
-    // Find the detail row (next sibling with class footable-detail-row)
+    // Tìm detail row (sibling tiếp theo có class footable-detail-row)
     const detailRow = row.locator('+ tr.footable-detail-row');
     const isVisible = await detailRow.isVisible();
-    
+
     if (!isVisible) {
-      throw new Error('[getExpandedRowData] Detail row is not visible. Please expand the row first.');
+      throw new Error('[getExpandedRowData] Detail row chưa visible. Gọi expandRow() trước.');
     }
 
     const data: Record<string, string> = {};
-    
-    // Get all detail rows from the nested table
+
+    // Đọc tất cả dòng từ nested table trong detail row
     const detailRows = detailRow.locator('table.footable-details tbody tr');
     const count = await detailRows.count();
 
@@ -791,21 +991,21 @@ export class CMSAllProductsPage extends BasePage {
       const detailRowItem = detailRows.nth(i);
       const th = await detailRowItem.locator('th').textContent();
       const td = await detailRowItem.locator('td').textContent();
-      
+
       if (th && td) {
-        // Clean key: trim whitespace
+        // Clean key: bỏ whitespace thừa
         const key = th.trim();
-        
-        // Clean value: normalize whitespace (replace multiple spaces/newlines with single space)
+
+        // Clean value: gộp nhiều khoảng trắng/xuống dòng thành 1 space
         const value = td
-          .replace(/\s+/g, ' ')  // Replace multiple whitespace chars with single space
-          .trim();               // Remove leading/trailing whitespace
-        
+          .replace(/\s+/g, ' ')
+          .trim();
+
         data[key] = value;
       }
     }
 
-    console.log(`[getExpandedRowData] Retrieved ${Object.keys(data).length} fields from detail row`);
+    Logger.info(`📱 [getExpandedRowData] Đọc được ${Object.keys(data).length} fields từ detail row`);
     return data;
   }
 }

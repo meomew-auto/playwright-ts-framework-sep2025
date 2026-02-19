@@ -159,14 +159,17 @@ export default defineConfig<CustomTestOptions>({
     },
 
     // ──────────────────────────────────────────────────────────
-    // 📱 CMS — Mobile Tests (iPad viewport)
+    // 📱 CMS — Mobile Tests (iPhone viewport)
     // ──────────────────────────────────────────────────────────
+    // ⚠️ PHẢI dùng viewport < 768px để trigger Footable responsive mode.
+    // iPad (810px) quá rộng → Footable KHÔNG ẩn cột → expandRow() fail.
+    // iPhone 12 (390px) → Footable ẩn cột → expand/collapse hoạt động.
     {
       name: 'cms-mobile',
       testDir: './src/presentation/tests/cms',
       testMatch: '**/*.mobile.spec.ts',
       use: {
-        ...devices['iPad (gen 7)'],
+        ...devices['iPhone 12'],
         viewportType: 'mobile' as const,
         storageState: `${CMS_AUTH_DIR}/admin.json`,
       },

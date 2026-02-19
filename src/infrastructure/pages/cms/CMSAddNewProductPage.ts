@@ -125,6 +125,7 @@ export class CMSAddNewProductPage extends BasePage {
     isQuantityMultipliedCheckbox: 'input[name="is_quantity_multiplied"]',
     saveUnpublishButton: 'button[name="button"][value="unpublish"]',
     savePublishButton: 'button[name="button"][value="publish"]',
+    successAlert: '.alert-success, .aiz-alert-success, [role="alert"].alert-success',
 
     // ========== Page Elements ==========
     pageTitle: (page: Page) =>
@@ -347,11 +348,40 @@ export class CMSAddNewProductPage extends BasePage {
   }
 
   /**
-   * Submit form với Save & Publish
+   * Submit form với Save & Publish.
+   *
+   * ═══════════════════════════════════════════════════════════════
+   * 🐛 DEBUGGING HISTORY — Tại sao dùng toHaveURL thay vì alert?
+   * ═══════════════════════════════════════════════════════════════
+   *
+   * CMS flow: Click Save → POST → 302 Redirect → GET /admin/products
+   * Trang redirect có flash alert: "Product has been inserted successfully"
+   * Alert này AUTO-DISMISS sau ~3 giây rồi biến mất.
+   *
+   * ❌ Approach 1: waitForLoadState('networkidle') + toBeVisible()
+   *    → networkidle đợi TẤT CẢ resources (images, fonts, scripts)
+   *    → Mất 3-5s → alert đã dismiss → fail
+   *
+   * ❌ Approach 2: Promise.all([waitFor('visible'), click])
+   *    → waitFor bắt đầu trên OLD page → page navigate → frame detached
+   *    → waitFor không recover kịp trước khi alert dismiss
+   *
+   * ❌ Approach 3: waitForURL(domcontentloaded) + waitFor('visible')
+   *    → Vẫn race condition: domcontentloaded resolve nhưng alert đã dismiss
+   *
+   * ❌ Approach 4: expect(successAlert).toBeVisible({ timeout: 15000 })
+   *    → Web-first assertion tự retry nhưng qua page navigation,
+   *      polling bị gián đoạn (frame detach) → miss cửa sổ 3s
+   *
+   * ✅ SOLUTION: expect(page).toHaveURL() — Assert URL redirect
+   *    → URL là state VĨNH VIỄN (không auto-dismiss như alert)
+   *    → Regex: /\/admin\/products(?!\/create)/ = products page, KHÔNG phải create
+   *    → Chứng minh save thành công: chỉ khi POST 302 mới redirect khỏi /create
+   *    → Hoạt động ổn định cả parallel (6 workers) lẫn serial
    */
   async savePublish() {
     await this.clickWithLog(this.element('savePublishButton'));
-    await this.page.waitForLoadState('networkidle');
+    await expect(this.page).toHaveURL(/\/admin\/products(?!\/create)/, { timeout: 15000 });
   }
 
   /**
@@ -1165,6 +1195,35 @@ export class CMSAddNewProductPage extends BasePage {
           await tax.fill({ tax: data.tax, taxType: data.taxType });
         }
       },
+      /**
+       * Verify field values trong General tab.
+       * Chỉ verify các fields được truyền vào (partial), skip undefined.
+       * Auto-detect type: boolean → toBeChecked, number → toString(), RegExp → regex match.
+       */
+      verify: async (data: {
+        name?: string | RegExp;
+        unit?: string;
+        weight?: number;
+        minQty?: number;
+        barcode?: string;
+        featured?: boolean;
+        todaysDeal?: boolean;
+        tax?: number;
+        flashDiscount?: number;
+      }) => {
+        const fields = [
+          data.name !== undefined && { locator: this.element('productNameInput'), expected: data.name },
+          data.unit !== undefined && { locator: this.element('unitInput'), expected: data.unit },
+          data.weight !== undefined && { locator: this.element('weightInput'), expected: data.weight },
+          data.minQty !== undefined && { locator: this.element('minQtyInput'), expected: data.minQty },
+          data.barcode !== undefined && { locator: this.element('barcodeInput'), expected: data.barcode },
+          data.featured !== undefined && { locator: this.element('featuredCheckbox'), expected: data.featured },
+          data.todaysDeal !== undefined && { locator: this.element('todaysDealCheckbox'), expected: data.todaysDeal },
+          data.tax !== undefined && { locator: this.element('taxInput'), expected: data.tax },
+          data.flashDiscount !== undefined && { locator: this.element('flashDiscountInput'), expected: data.flashDiscount },
+        ].filter(Boolean) as Array<{ locator: any; expected: any }>;
+        await this.verifyFieldValues(fields);
+      },
     };
 
     // Files & Media Tab
@@ -1263,6 +1322,32 @@ export class CMSAddNewProductPage extends BasePage {
         if (data.lowStockQuantity !== undefined || data.stockVisibilityState) {
           await stock.fill({ lowStockQuantity: data.lowStockQuantity, stockVisibilityState: data.stockVisibilityState });
         }
+      },
+      /**
+       * Verify field values trong Price & Stock tab.
+       * Chỉ verify các fields được truyền vào (partial), skip undefined.
+       */
+      verify: async (data: {
+        unitPrice?: number;
+        discount?: number;
+        quantity?: number;
+        sku?: string;
+        externalLink?: string;
+        externalLinkBtn?: string;
+        lowStockQuantity?: number;
+        cashOnDelivery?: boolean;
+      }) => {
+        const fields = [
+          data.unitPrice !== undefined && { locator: this.element('unitPriceInput'), expected: data.unitPrice },
+          data.discount !== undefined && { locator: this.element('discountInput'), expected: data.discount },
+          data.quantity !== undefined && { locator: this.element('quantityInput'), expected: data.quantity },
+          data.sku !== undefined && { locator: this.element('skuInput'), expected: data.sku },
+          data.externalLink !== undefined && { locator: this.element('externalLinkInput'), expected: data.externalLink },
+          data.externalLinkBtn !== undefined && { locator: this.element('externalLinkBtnInput'), expected: data.externalLinkBtn },
+          data.lowStockQuantity !== undefined && { locator: this.element('lowStockQuantityInput'), expected: data.lowStockQuantity },
+          data.cashOnDelivery !== undefined && { locator: this.element('cashOnDeliveryCheckbox'), expected: data.cashOnDelivery },
+        ].filter(Boolean) as Array<{ locator: any; expected: any }>;
+        await this.verifyFieldValues(fields);
       },
     };
 

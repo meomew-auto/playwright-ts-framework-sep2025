@@ -34,12 +34,30 @@
  * - Không dùng fixture `page` trực tiếp — luôn thao tác qua `allProductsPage`
  * - URL assertions dùng `allProductsPage.page` (kế thừa từ BasePage)
  * - Không đặt raw locator trong test — mọi locator nằm trong Page Object
+ *
+ * ════════════════════════════════════════════════════════════════════════════
+ * ⚠️ TẠI SAO PHẢI DÙNG SERIAL MODE?
+ * ════════════════════════════════════════════════════════════════════════════
+ *
+ * File này chứa mutating tests (edit, delete) → PHẢI serial vì:
+ *
+ * 1. DATA CONFLICT: Các TC dùng chung data (getFirstProductName)
+ *    - TC_05 delete product A → TC_01 cố edit product A → fail
+ *    - TC_06 bulk delete → TC_02 getDefaultTableData() → empty
+ *
+ * 2. TABLE STATE: rows.count() là imperative (không retry)
+ *    → Nếu table đang re-render do TC khác navigate → count = 0
+ *
+ * 3. MUỐN PARALLEL CHO DELETE?
+ *    → Mỗi TC phải tự tạo product riêng (setup → action → verify)
+ *    → Nhưng tốn thêm thời gian setup mỗi TC
+ *    → Serial đơn giản hơn và đủ nhanh (45s cho 8 TC)
  */
 import { test, expect } from '@fixtures/cms/ui/gatekeeper.fixture';
 import { Logger } from '@utils/Logger';
 
 test.describe('CMS Quản Lý Sản Phẩm', () => {
-  // Chạy tuần tự để tránh conflict khi nhiều tests cùng edit/delete
+  // ⚠️ BẮT BUỘC SERIAL — Xem header comment ở trên để hiểu tại sao
   test.describe.configure({ mode: 'serial' });
 
   test('TC_01: Click Edit sản phẩm - editProduct()', async ({ allProductsPage }) => {

@@ -202,6 +202,8 @@ test.describe('CMS Tất Cả Sản Phẩm', () => {
         );
         await expect(row).toBeVisible();
         Logger.info(`📄 Tìm thấy ở trang ${pageNumber}`);
+      } else {
+        Logger.info(`✅ Tìm thấy "${targetProduct}" ngay ở kết quả search trang 1`);
       }
     } else {
       Logger.info('⏭️ Bỏ qua test: Không đủ dữ liệu');

@@ -64,14 +64,24 @@
  *    │ const data = getTestData('products', 'minimal');                   │
  *    └─────────────────────────────────────────────────────────────────────┘
  *
- * 6️⃣ AUTHEDPAGE — Page đã đăng nhập (cho raw locator assertions)
- *    ┌─────────────────────────────────────────────────────────────────────┐
- *    │ // Khi cần assert element KHÔNG có trong Page Object               │
- *    │ await expect(authedPage.locator('.alert-success')).toBeVisible();  │
- *    │ // authedPage = Playwright Page đã login, inject qua fixture       │
- *    └─────────────────────────────────────────────────────────────────────┘
+ * ════════════════════════════════════════════════════════════════════════════
+ * ⚠️ LƯU Ý VỀ PARALLEL & SERIAL
+ * ════════════════════════════════════════════════════════════════════════════
+ *
+ * CÓ THỂ CHẠY PARALLEL: Mỗi TC tạo product MỚI (tên unique từ Factory/Schema)
+ * → Không conflict data giữa các workers.
+ *
+ * VỀ savePublish():
+ * - KHÔNG assert successAlert (toast auto-dismiss sau ~3s, miss qua navigation)
+ * - Assert bằng expect(page).toHaveURL() — URL redirect là state vĩnh viễn
+ * - Chi tiết debugging: xem JSDoc của savePublish() trong CMSAddNewProductPage
+ *
+ * VỀ CMS DEMO SERVER:
+ * - Server demo có thể chậm khi 6 workers đồng thời
+ * - Nếu fail intermittent: tăng timeout trong savePublish() hoặc dùng serial
+ * - Dùng serial: test.describe.configure({ mode: 'serial' })
  */
-import { test, expect } from '@fixtures/cms/ui/gatekeeper.fixture';
+import { test } from '@fixtures/cms/ui/gatekeeper.fixture';
 import { createMinimalProductInfo, createFullProductInfo, createProductWithDiscount } from '@data/cms/ProductDataFactory';
 import { getTestData } from '@data/common/TestDataRepository';
 
@@ -82,7 +92,7 @@ test.describe('CMS Thêm sản phẩm mới', () => {
     await addNewProductPage.expectOnPage();
   });
 
-  test('TC_02: Điền thông tin sản phẩm cơ bản (Factory)', async ({ addNewProductPage, authedPage }) => {
+  test('TC_02: Điền thông tin sản phẩm cơ bản (Factory)', async ({ addNewProductPage }) => {
     const productData = createMinimalProductInfo();
 
     // Fill basic required fields
@@ -99,11 +109,15 @@ test.describe('CMS Thêm sản phẩm mới', () => {
     });
 
     // Verify fields are filled
-    await expect(addNewProductPage.element('productNameInput')).toHaveValue(new RegExp(productData.name));
-    await expect(addNewProductPage.element('unitInput')).toHaveValue(productData.unit);
-    await expect(addNewProductPage.element('minQtyInput')).toHaveValue(productData.minQty.toString());
-    await expect(addNewProductPage.element('unitPriceInput')).toHaveValue(productData.unitPrice.toString());
-    await expect(addNewProductPage.element('quantityInput')).toHaveValue(productData.quantity.toString());
+    await addNewProductPage.sections.general.verify({
+      name: new RegExp(productData.name),
+      unit: productData.unit,
+      minQty: productData.minQty,
+    });
+    await addNewProductPage.sections.priceAndStock.verify({
+      unitPrice: productData.unitPrice,
+      quantity: productData.quantity,
+    });
 
     // Upload thumbnail image
     await addNewProductPage.uploadThumbnailImage(0);
@@ -111,11 +125,9 @@ test.describe('CMS Thêm sản phẩm mới', () => {
     // Save product
     await addNewProductPage.savePublish();
 
-    // Verify success
-    await expect(authedPage.locator('.alert-success, .aiz-alert-success, [role="alert"]')).toBeVisible({ timeout: 10000 });
   });
 
-  test('TC_03: Điền thông tin sản phẩm cơ bản (Schema)', async ({ addNewProductPage, authedPage }) => {
+  test('TC_03: Điền thông tin sản phẩm cơ bản (Schema)', async ({ addNewProductPage }) => {
     const productData = getTestData('products', 'minimal');
 
     // Fill basic required fields
@@ -132,11 +144,15 @@ test.describe('CMS Thêm sản phẩm mới', () => {
     });
 
     // Verify fields are filled
-    await expect(addNewProductPage.element('productNameInput')).toHaveValue(new RegExp(productData.name));
-    await expect(addNewProductPage.element('unitInput')).toHaveValue(productData.unit);
-    await expect(addNewProductPage.element('minQtyInput')).toHaveValue(productData.minQty.toString());
-    await expect(addNewProductPage.element('unitPriceInput')).toHaveValue(productData.unitPrice.toString());
-    await expect(addNewProductPage.element('quantityInput')).toHaveValue(productData.quantity.toString());
+    await addNewProductPage.sections.general.verify({
+      name: new RegExp(productData.name),
+      unit: productData.unit,
+      minQty: productData.minQty,
+    });
+    await addNewProductPage.sections.priceAndStock.verify({
+      unitPrice: productData.unitPrice,
+      quantity: productData.quantity,
+    });
 
     // Upload thumbnail image
     await addNewProductPage.uploadThumbnailImage(0);
@@ -144,11 +160,9 @@ test.describe('CMS Thêm sản phẩm mới', () => {
     // Save product
     await addNewProductPage.savePublish();
 
-    // Verify success
-    await expect(authedPage.locator('.alert-success, .aiz-alert-success, [role="alert"]')).toBeVisible({ timeout: 10000 });
   });
 
-  test('TC_04: Điền đầy đủ thông tin sản phẩm (Factory)', async ({ addNewProductPage, authedPage }) => {
+  test('TC_04: Điền đầy đủ thông tin sản phẩm (Factory)', async ({ addNewProductPage }) => {
     const productData = createFullProductInfo();
 
     // Fill Product Information section
@@ -220,18 +234,18 @@ test.describe('CMS Thêm sản phẩm mới', () => {
     await addNewProductPage.sections.filesAndMedia.uploadGalleryImages(1);
 
     // Verify some key fields
-    await expect(addNewProductPage.element('productNameInput')).toHaveValue(productData.name);
-    await expect(addNewProductPage.element('unitPriceInput')).toHaveValue(productData.unitPrice.toString());
-    await expect(addNewProductPage.element('quantityInput')).toHaveValue(productData.quantity.toString());
+    await addNewProductPage.sections.general.verify({ name: productData.name });
+    await addNewProductPage.sections.priceAndStock.verify({
+      unitPrice: productData.unitPrice,
+      quantity: productData.quantity,
+    });
 
     // Save product
     await addNewProductPage.savePublish();
 
-    // Verify success
-    await expect(authedPage.locator('.alert-success, .aiz-alert-success, [role="alert"]')).toBeVisible({ timeout: 10000 });
   });
 
-  test('TC_05: Bật/tắt cài đặt sản phẩm', async ({ addNewProductPage, authedPage }) => {
+  test('TC_05: Bật/tắt cài đặt sản phẩm', async ({ addNewProductPage }) => {
     await addNewProductPage.sections.general.fill({
       name: 'Settings Product ' + Date.now(),
       category: null,
@@ -250,13 +264,12 @@ test.describe('CMS Thêm sản phẩm mới', () => {
     await addNewProductPage.toggleTodaysDeal(true);
 
     // Verify checkboxes are checked
-    await expect(addNewProductPage.element('cashOnDeliveryCheckbox')).toBeChecked();
-    await expect(addNewProductPage.element('featuredCheckbox')).toBeChecked();
-    await expect(addNewProductPage.element('todaysDealCheckbox')).toBeChecked();
+    await addNewProductPage.sections.priceAndStock.verify({ cashOnDelivery: true });
+    await addNewProductPage.sections.general.verify({ featured: true, todaysDeal: true });
 
     // Toggle off
     await addNewProductPage.toggleFeatured(false);
-    await expect(addNewProductPage.element('featuredCheckbox')).not.toBeChecked();
+    await addNewProductPage.sections.general.verify({ featured: false });
 
     // Upload thumbnail image
     await addNewProductPage.sections.filesAndMedia.uploadThumbnailImage(0);
@@ -264,11 +277,9 @@ test.describe('CMS Thêm sản phẩm mới', () => {
     // Save product
     await addNewProductPage.savePublish();
 
-    // Verify success
-    await expect(authedPage.locator('.alert-success, .aiz-alert-success, [role="alert"]')).toBeVisible({ timeout: 10000 });
   });
 
-  test('TC_06: Cấu hình giảm giá và thuế (Factory)', async ({ addNewProductPage, authedPage }) => {
+  test('TC_06: Cấu hình giảm giá và thuế (Factory)', async ({ addNewProductPage }) => {
     const productData = createProductWithDiscount({
       tax: 10,
       taxType: 'Percent',
@@ -300,12 +311,12 @@ test.describe('CMS Thêm sản phẩm mới', () => {
     });
 
     // Verify discount and tax
-    if (productData.discount) {
-      await expect(addNewProductPage.element('discountInput')).toHaveValue(productData.discount.toString());
-    }
-    if (productData.tax) {
-      await expect(addNewProductPage.element('taxInput')).toHaveValue(productData.tax.toString());
-    }
+    await addNewProductPage.sections.priceAndStock.verify({
+      discount: productData.discount,
+    });
+    await addNewProductPage.sections.general.verify({
+      tax: productData.tax,
+    });
 
     // Upload thumbnail image
     await addNewProductPage.sections.filesAndMedia.uploadThumbnailImage(0);
@@ -313,7 +324,5 @@ test.describe('CMS Thêm sản phẩm mới', () => {
     // Save product
     await addNewProductPage.savePublish();
 
-    // Verify success
-    await expect(authedPage.locator('.alert-success, .aiz-alert-success, [role="alert"]')).toBeVisible({ timeout: 10000 });
   });
 });

@@ -85,7 +85,11 @@ async function createColumnMap(headers: Locator): Promise<ColumnMap> {
 
   for (let index = 0; index < count; index++) {
     const headerLocator = headers.nth(index);
-    const rawText = await headerLocator.innerText();
+    // Dùng textContent() thay vì innerText() vì innerText() trả "" cho
+    // elements bị hidden (display: none). Trên mobile, Footable ẩn cột
+    // bằng display: none → innerText() trả rỗng → column map sai.
+    // textContent() luôn trả text bất kể CSS visibility.
+    const rawText = (await headerLocator.textContent()) ?? '';
     const clean = cleanHeaderText(rawText);
 
     const info: ColumnInfo = {

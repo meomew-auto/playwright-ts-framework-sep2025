@@ -41,9 +41,19 @@ export abstract class BasePage {
   // Viewport type for responsive locators
   protected viewportType: ViewportType;
 
+  // Label for parallel test identification (e.g. "TC_02")
+  public testLabel: string = '';
+
   constructor(public readonly page: Page, viewportType: ViewportType = 'desktop') {
     this.helpers = new BootstrapSelectHelper(page);
     this.viewportType = viewportType;
+  }
+
+  /** Prefix cho log messages — e.g. `[TC_02] [📱 Mobile] ` hoặc `[TC_02] [🖥️ Desktop] ` */
+  protected get logPrefix(): string {
+    const label = this.testLabel ? `[${this.testLabel}] ` : '';
+    const viewport = this.viewportType === 'mobile' ? '[📱 Mobile] ' : '[🖥️ Desktop] ';
+    return `${label}${viewport}`;
   }
 
 
@@ -316,7 +326,7 @@ export abstract class BasePage {
    */
   protected async logClick(locator: Locator) {
     const elementInfo = await this.getElementInfo(locator);
-    Logger.ui(`👆 Click ${elementInfo}`);
+    Logger.ui(`${this.logPrefix}👆 Click ${elementInfo}`);
   }
 
   /**
@@ -335,7 +345,7 @@ export abstract class BasePage {
   protected async logFill(locator: Locator, value?: string) {
     const elementInfo = await this.getElementInfo(locator);
     const valueInfo = value ? ` ← "${value}"` : '';
-    Logger.ui(`✏️ Fill ${elementInfo}${valueInfo}`);
+    Logger.ui(`${this.logPrefix}✏️ Fill ${elementInfo}${valueInfo}`);
   }
 
   // ========== Wrapper Methods (Auto-log) ==========
@@ -493,7 +503,7 @@ export abstract class BasePage {
    * ```
    */
   protected async navigateTo(path: string, options?: Parameters<Page['goto']>[1]) {
-    Logger.ui(`📍 Navigate to ${path}`);
+    Logger.ui(`${this.logPrefix}📍 Navigate to ${path}`);
     await this.page.goto(path, options);
   }
 
@@ -516,7 +526,7 @@ export abstract class BasePage {
     timeout: number = 5000
   ): Promise<void> {
     const elementInfo = await this.getElementInfo(locator).catch(() => locator.toString());
-    Logger.ui(`⏳ Wait for ${elementInfo} to be visible`);
+    Logger.ui(`${this.logPrefix}⏳ Wait for ${elementInfo} to be visible`);
     try {
       await expect(locator).toBeVisible({ timeout });
     } catch (error) {
@@ -550,7 +560,7 @@ export abstract class BasePage {
     timeout: number = 5000
   ): Promise<void> {
     const elementInfo = await this.getElementInfo(locator).catch(() => locator.toString());
-    Logger.ui(`⏳ Wait for ${elementInfo} to be hidden`);
+    Logger.ui(`${this.logPrefix}⏳ Wait for ${elementInfo} to be hidden`);
     try {
       await expect(locator).toBeHidden({ timeout });
     } catch (error) {
@@ -596,9 +606,9 @@ export abstract class BasePage {
   ): Promise<T> {
     const contextMsg = context ? `${context}: ` : '';
     try {
-      if (context) Logger.ui(`Starting: ${context}`);
+      if (context) Logger.ui(`${this.logPrefix}Starting: ${context}`);
       const result = await operation();
-      if (context) Logger.ui(`✓ Completed: ${context}`);
+      if (context) Logger.ui(`${this.logPrefix}✓ Completed: ${context}`);
       return result;
     } catch (error) {
       const originalError = error instanceof Error ? error : new Error(String(error));
@@ -613,6 +623,52 @@ export abstract class BasePage {
       
       Logger.error(`❌ Failed: ${context}`, { error: originalError });
       throw enhancedError;
+    }
+  }
+
+  // ========== FIELD VERIFICATION ==========
+
+  /**
+   * Verify nhiều field values cùng lúc, auto-detect type:
+   *   boolean → toBeChecked / not.toBeChecked
+   *   RegExp  → toHaveValue(regex)
+   *   string  → toHaveValue(string)
+   *   number  → toHaveValue(String(number))
+   *
+   * @param fields - Array of { locator, expected } pairs
+   *
+   * @example
+   * ```typescript
+   * // Gọi trực tiếp
+   * await this.verifyFieldValues([
+   *   { locator: this.element('productNameInput'), expected: 'iPhone 15' },
+   *   { locator: this.element('unitPriceInput'),   expected: 100 },
+   *   { locator: this.element('featuredCheckbox'),  expected: true },
+   * ]);
+   *
+   * // Trong section verify() — auto-filter undefined
+   * const fields = [
+   *   data.name     !== undefined && { locator: self.element('productNameInput'), expected: data.name },
+   *   data.minQty   !== undefined && { locator: self.element('minQtyInput'),      expected: data.minQty },
+   * ].filter(Boolean);
+   * await self.verifyFieldValues(fields);
+   * ```
+   */
+  async verifyFieldValues(
+    fields: Array<{ locator: Locator; expected: string | number | RegExp | boolean }>
+  ): Promise<void> {
+    for (const { locator, expected } of fields) {
+      if (typeof expected === 'boolean') {
+        if (expected) {
+          await expect(locator).toBeChecked();
+        } else {
+          await expect(locator).not.toBeChecked();
+        }
+      } else if (expected instanceof RegExp) {
+        await expect(locator).toHaveValue(expected);
+      } else {
+        await expect(locator).toHaveValue(String(expected));
+      }
     }
   }
 

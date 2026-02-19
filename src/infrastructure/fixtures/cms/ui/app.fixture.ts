@@ -25,7 +25,7 @@
  * - Import POMs từ: pages/cms/
  */
 
-import { PlaywrightTestArgs } from '@playwright/test';
+import { PlaywrightTestArgs, TestInfo } from '@playwright/test';
 import { AuthFixtures } from './auth.fixture';
 import { ViewportType } from '../../common/ViewportType';
 import { Logger } from '../../../utils/Logger';
@@ -35,6 +35,7 @@ import { CMSLoginPage } from '../../../pages/cms/CMSLoginPage';
 import { CMSAllProductsPage } from '../../../pages/cms/CMSAllProductsPage';
 import { CMSDashboardPage } from '../../../pages/cms/CMSDashboardPage';
 import { CMSAddNewProductPage } from '../../../pages/cms/CMSAddNewProductPage';
+import { BasePage } from '../../../pages/base/BasePage';
 
 // ═══════════════════════════════════════════════════════════════════════════
 // TYPE DEFINITIONS
@@ -49,6 +50,20 @@ export type AppFixtures = {
 /** Dependencies — Playwright inject các fixtures này tự động */
 type AppDeps = PlaywrightTestArgs & AuthFixtures & { viewportType?: ViewportType };
 
+/**
+ * Extract TC label từ test title, VD: "TC_02: Điền thông tin..." → "TC_02"
+ * Fallback: dùng full title nếu không match pattern TC_XX
+ */
+function extractTestLabel(testInfo: TestInfo): string {
+  const match = testInfo.title.match(/^(TC_\d+)/);
+  return match ? match[1] : testInfo.title.slice(0, 20);
+}
+
+/** Set testLabel cho POM — dùng cho parallel log identification */
+function setTestLabel(page: BasePage, testInfo: TestInfo) {
+  page.testLabel = extractTestLabel(testInfo);
+}
+
 // ═══════════════════════════════════════════════════════════════════════════
 // FIXTURES OBJECT — Export dạng object để spread vào gatekeeper
 // ═══════════════════════════════════════════════════════════════════════════
@@ -59,9 +74,11 @@ export const appFixtures = {
    */
   dashboardPage: async (
     { authedPage, viewportType }: AppDeps,
-    use: (r: CMSDashboardPage) => Promise<void>
+    use: (r: CMSDashboardPage) => Promise<void>,
+    testInfo: TestInfo
   ) => {
     const dashboardPage = new CMSDashboardPage(authedPage, viewportType || 'desktop');
+    setTestLabel(dashboardPage, testInfo);
     await dashboardPage.goto();
     Logger.info('DashboardPage ready', { context: 'fixture' });
     await use(dashboardPage);
@@ -72,9 +89,11 @@ export const appFixtures = {
    */
   allProductsPage: async (
     { authedPage, viewportType }: AppDeps,
-    use: (r: CMSAllProductsPage) => Promise<void>
+    use: (r: CMSAllProductsPage) => Promise<void>,
+    testInfo: TestInfo
   ) => {
     const allProductsPage = new CMSAllProductsPage(authedPage, viewportType || 'desktop');
+    setTestLabel(allProductsPage, testInfo);
     await allProductsPage.goto();
     await allProductsPage.expectOnPage();
     Logger.info('AllProductsPage ready', { context: 'fixture' });
@@ -86,9 +105,11 @@ export const appFixtures = {
    */
   addNewProductPage: async (
     { authedPage, viewportType }: AppDeps,
-    use: (r: CMSAddNewProductPage) => Promise<void>
+    use: (r: CMSAddNewProductPage) => Promise<void>,
+    testInfo: TestInfo
   ) => {
     const addNewProductPage = new CMSAddNewProductPage(authedPage, viewportType || 'desktop');
+    setTestLabel(addNewProductPage, testInfo);
     await addNewProductPage.goto();
     await addNewProductPage.expectOnPage();
     Logger.info('AddNewProductPage ready', { context: 'fixture' });
