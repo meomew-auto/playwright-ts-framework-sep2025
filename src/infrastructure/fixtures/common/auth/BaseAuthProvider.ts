@@ -99,14 +99,14 @@ export abstract class BaseAuthProvider {
    * Ví dụ với envPrefix = 'NEKO':
    * - apiUrl     ← NEKO_API_URL
    * - uiOrigin   ← NEKO_UI_ORIGIN
-   * - authDir    ← NEKO_AUTH_DIR (default: 'auth')
+   * - authDir    ← AUTH_DIR (shared, default: '.auth')
    * - bufferMinutes ← NEKO_TOKEN_BUFFER_MINUTES (default: 5)
    */
   get config(): AuthConfig {
     return {
       apiUrl: EnvManager.get(`${this.envPrefix}_API_URL`),
       uiOrigin: EnvManager.get(`${this.envPrefix}_UI_ORIGIN`),
-      authDir: EnvManager.get(`${this.envPrefix}_AUTH_DIR`, 'auth'),
+      authDir: EnvManager.get('AUTH_DIR', '.auth'),
       bufferMinutes: EnvManager.getNumber(`${this.envPrefix}_TOKEN_BUFFER_MINUTES`, 5),
     };
   }
@@ -118,11 +118,13 @@ export abstract class BaseAuthProvider {
   // đọc/ghi file JSON, compose login flow.
 
   /**
-   * Tạo đường dẫn đến file storageState: {authDir}/{role}.json
-   * Ví dụ: 'auth/admin.json', '.auth/cms-admin.json'
+   * Tạo đường dẫn đến file storageState: {authDir}/{prefix}-{role}.json
+   * Prefix tự lấy từ envPrefix (lowercase) để tránh conflict khi dùng chung folder.
+   * Ví dụ: '.auth/neko-admin.json', '.auth/cms-admin.json'
    */
   getStorageStatePath(role: string): string {
-    return path.join(this.config.authDir, `${role}.json`);
+    const prefix = this.envPrefix.toLowerCase();
+    return path.join(this.config.authDir, `${prefix}-${role}.json`);
   }
 
   /** Kiểm tra file storageState tồn tại trên disk */

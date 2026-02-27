@@ -6,9 +6,8 @@ node_modules/
 /blob-report/
 /playwright/.cache/
 
-# Auth storage state (auto-generated bởi setup project)
+# Auth storage state (auto-generated bởi setup projects — chung cho tất cả projects)
 /.auth/
-/auth/
 
 # ══════════════════════════════════════════════════════════════════════
 # Biến môi trường

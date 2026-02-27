@@ -50,14 +50,14 @@ export class ProductsPage extends BasePage {
   // 🔹 PAGE LOCATORS: Định nghĩa tất cả selectors cho page
   // ──────────────────────────────────────────────────────────
   private readonly pageLocators = {
-    // Header / Navigation
-    logo: (page: Page) => page.getByRole('link', { name: /Neko Coffee/i }),
-    navHome: (page: Page) => page.getByRole('link', { name: 'Trang chủ' }),
-    navShop: (page: Page) => page.getByRole('link', { name: 'Cửa hàng' }),
-    navAbout: (page: Page) => page.getByRole('link', { name: 'Về chúng tôi' }),
-    navOrderTracking: (page: Page) => page.getByRole('link', { name: 'Tra cứu đơn' }),
-    navRegister: (page: Page) => page.getByRole('link', { name: 'Đăng ký' }),
-    navLogin: (page: Page) => page.getByRole('link', { name: 'Đăng nhập' }),
+    // Header / Navigation — scope vào header để tránh match footer links
+    logo: (page: Page) => page.locator('header').getByRole('link', { name: /Neko Coffee/i }),
+    navHome: (page: Page) => page.locator('header').getByRole('link', { name: 'Trang chủ' }),
+    navShop: (page: Page) => page.locator('header').getByRole('link', { name: 'Cửa hàng' }),
+    navAbout: (page: Page) => page.locator('header').getByRole('link', { name: 'Về chúng tôi' }),
+    navOrderTracking: (page: Page) => page.locator('header').getByRole('link', { name: 'Tra cứu đơn' }),
+    navRegister: (page: Page) => page.locator('header').getByRole('link', { name: 'Đăng ký' }),
+    navLogin: (page: Page) => page.locator('header').getByRole('link', { name: 'Đăng nhập' }),
 
     // Page Title / Heading
     pageTitle: (page: Page) => page.getByRole('heading', { name: 'Cửa hàng', level: 1 }),
@@ -97,6 +97,48 @@ export class ProductsPage extends BasePage {
   // 🔹 ELEMENT GETTER
   // ──────────────────────────────────────────────────────────
   public element = this.createLocatorGetter(this.pageLocators);
+
+  // ──────────────────────────────────────────────────────────
+  // 🔹 VERIFY SECTION — Encapsulate locator + assertion logic
+  // ──────────────────────────────────────────────────────────
+  // Test spec chỉ cần gọi: await productsPage.verify.pageTitle('Cửa hàng');
+  // Không cần biết tên locator key hay gọi expect() trực tiếp.
+  // ──────────────────────────────────────────────────────────
+  readonly verify = {
+    /** Verify tiêu đề trang hiển thị đúng */
+    pageTitle: async (text: string | RegExp = 'Cửa hàng') => {
+      await this.verifyTextValues([
+        { locator: this.element('pageTitle'), expected: text },
+      ]);
+    },
+
+    /** Verify thanh navigation hiển thị đầy đủ các mục */
+    // Chỉ cần check visibility — locator getByRole(name) đã validate text rồi.
+    // Không dùng toHaveText() vì nav links chứa Material icon text (e.g. "local_shippingTra cứu đơn").
+    navigation: async () => {
+      await expect(this.element('navHome')).toBeVisible();
+      await expect(this.element('navShop')).toBeVisible();
+      await expect(this.element('navAbout')).toBeVisible();
+      await expect(this.element('navOrderTracking')).toBeVisible();
+    },
+
+    /** Verify logo hiển thị trong header */
+    logo: async () => {
+      await expect(this.element('logo')).toBeVisible();
+    },
+
+    /** Verify footer hiển thị */
+    footer: async () => {
+      await expect(this.element('footer')).toBeVisible();
+    },
+
+    /** Verify copyright text trong footer */
+    footerCopyright: async () => {
+      await this.verifyTextValues([
+        { locator: this.element('footerCopyright'), expected: /© \d{4} Neko Coffee/ },
+      ]);
+    },
+  };
 
   constructor(page: Page, viewportType: ViewportType = 'desktop') {
     super(page, viewportType);
@@ -179,18 +221,22 @@ export class ProductsPage extends BasePage {
 
   /**
    * Click vào sản phẩm theo tên
+   * Click vào thẻ <a> bên trong card để navigate sang trang detail
    */
   async clickProduct(productName: string): Promise<void> {
     const card = this.element('productCardByName')(productName);
-    await this.clickWithLog(card);
+    const link = card.locator('a[href^="/products/"]').first();
+    await this.clickWithLog(link);
   }
 
   /**
    * Click vào sản phẩm theo index (0-based)
+   * Click vào thẻ <a> bên trong card để navigate sang trang detail
    */
   async clickProductByIndex(index: number): Promise<void> {
     const card = this.element('productCardByIndex')(index);
-    await this.clickWithLog(card);
+    const link = card.locator('a[href^="/products/"]').first();
+    await this.clickWithLog(link);
   }
 
   // ═══════════════════════════════════════════════════════════

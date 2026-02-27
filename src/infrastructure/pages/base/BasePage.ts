@@ -673,6 +673,43 @@ export abstract class BasePage {
   }
 
   /**
+   * Verify text content nhiều elements cùng lúc.
+   * Auto: toBeVisible() → toHaveText() cho mỗi field.
+   *
+   * Khác `verifyFieldValues()`:
+   *   - `verifyFieldValues()` → `toHaveValue()` — cho `<input>`, `<select>` (form)
+   *   - `verifyTextValues()`  → `toHaveText()`  — cho `<h1>`, `<span>`, `<p>` (display)
+   *
+   * @param fields - Array of { locator, expected } pairs
+   *
+   * @example
+   * ```typescript
+   * // Gọi trực tiếp
+   * await this.verifyTextValues([
+   *   { locator: this.element('pageTitle'), expected: 'Cửa hàng' },
+   *   { locator: this.element('copyright'), expected: /© \d{4} Neko/ },
+   * ]);
+   *
+   * // Trong Page Object verify section
+   * readonly verify = {
+   *   pageTitle: async (text: string | RegExp = 'Cửa hàng') => {
+   *     await this.verifyTextValues([
+   *       { locator: this.element('pageTitle'), expected: text },
+   *     ]);
+   *   },
+   * };
+   * ```
+   */
+  async verifyTextValues(
+    fields: Array<{ locator: Locator; expected: string | RegExp }>
+  ): Promise<void> {
+    for (const { locator, expected } of fields) {
+      await expect(locator).toBeVisible();
+      await expect(locator).toHaveText(expected);
+    }
+  }
+
+  /**
    * Abstract method - mỗi page phải implement để verify page đã load đúng
    * 
    * @returns Promise<void>

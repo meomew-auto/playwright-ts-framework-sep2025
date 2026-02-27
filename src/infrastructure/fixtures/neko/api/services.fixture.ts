@@ -7,38 +7,34 @@
  * Tạo Playwright APIRequestContext với baseURL và auth token,
  * rồi inject vào các service classes (ProductService, etc.)
  *
- * 📌 TẠI SAO TẠO API CONTEXT RIÊNG:
- * - UI test dùng page.request (context từ browser)
- * - API test cần context ĐỘC LẬP — không cần browser
- * - APIRequestContext từ `playwright.request.newContext()`
+ * 📌 DRY PATTERN:
+ * Dùng createNekoServices() từ neko-context.factory.ts (shared factory).
+ * Thêm service mới → chỉ cần sửa factory, không cần sửa file này.
  *
  * 📚 PATTERN:
- * authToken (từ auth.api.fixture) → apiRequest (context) → services
+ * authToken (từ auth.api.fixture) → createNekoServices(token) → services
  *
  * 🔗 LIÊN KẾT:
  * - Phụ thuộc: auth.api.fixture.ts (authToken)
+ * - Dùng: neko-context.factory.ts (createNekoServices)
  * - Dùng bởi: gatekeeper.api.fixture.ts (merge)
  */
 
-import { APIRequestContext, request as playwrightRequest } from '@playwright/test';
+import { APIRequestContext } from '@playwright/test';
 import { AuthApiFixtures } from './auth.api.fixture';
-import { ProductService } from '../../../api/services/neko/ProductService';
-import { EnvManager } from '../../../utils/EnvManager';
 import { Logger } from '../../../utils/Logger';
-
-// API Base URL from environment
-const API_BASE_URL = EnvManager.get('NEKO_API_URL');
+import {
+  createNekoServices,
+  type NekoServices,
+} from '../neko-context.factory';
 
 // ─────────────────────────────────────────────────────────────────────────
 // TYPE DEFINITIONS
 // ─────────────────────────────────────────────────────────────────────────
 
-export type ServicesFixtures = {
-  apiRequest: APIRequestContext;
-  productService: ProductService;
-};
+export type ServicesFixtures = NekoServices;
 
-type ServicesDeps = { apiRequest: APIRequestContext } & AuthApiFixtures;
+type ServicesDeps = AuthApiFixtures;
 
 // ─────────────────────────────────────────────────────────────────────────
 // FIXTURES
@@ -47,35 +43,56 @@ type ServicesDeps = { apiRequest: APIRequestContext } & AuthApiFixtures;
 export const servicesFixtures = {
   /**
    * API REQUEST CONTEXT
-   * 
-   * Luôn tạo context mới với API baseURL.
-   * Hoạt động cho cả:
-   * - Combined (neko-chromium): project baseURL là frontend
-   * - Standalone (neko-api): project baseURL là API
+   *
+   * Tạo context riêng với API baseURL.
+   * Dùng bởi services (inject qua factory).
    */
   apiRequest: async (
-    {}: Record<string, never>,
+    { authToken }: ServicesDeps,
     use: (r: APIRequestContext) => Promise<void>
   ) => {
-    const ctx = await playwrightRequest.newContext({
-      baseURL: API_BASE_URL,
-      extraHTTPHeaders: {
-        'Content-Type': 'application/json',
-      },
-    });
-
-    Logger.info(`API Context: ${API_BASE_URL}`, { context: 'fixture' });
-    await use(ctx);
-    await ctx.dispose();
+    const services = await createNekoServices(authToken);
+    Logger.info('API Context ready (via factory)', { context: 'fixture' });
+    await use(services.apiRequest);
+    await services.apiRequest.dispose();
   },
 
   /**
    * PRODUCT SERVICE
    */
   productService: async (
-    { apiRequest, authToken }: ServicesDeps,
-    use: (r: ProductService) => Promise<void>
+    { authToken }: ServicesDeps,
+    use: (r: NekoServices['productService']) => Promise<void>
   ) => {
-    await use(new ProductService(apiRequest, authToken));
+    const services = await createNekoServices(authToken);
+    await use(services.productService);
+    await services.apiRequest.dispose();
+  },
+
+  /**
+   * ORDER SERVICE
+   */
+  orderService: async (
+    { authToken }: ServicesDeps,
+    use: (r: NekoServices['orderService']) => Promise<void>
+  ) => {
+    const services = await createNekoServices(authToken);
+    await use(services.orderService);
+    await services.apiRequest.dispose();
+  },
+
+  /**
+   * chatService: API service cho Chat features
+   *
+   * Dùng cho: check online users, chat-related API calls
+   */
+  chatService: async (
+    { authToken }: ServicesDeps,
+    use: (r: NekoServices['chatService']) => Promise<void>
+  ) => {
+    const services = await createNekoServices(authToken);
+    await use(services.chatService);
+    await services.apiRequest.dispose();
   },
 };
+

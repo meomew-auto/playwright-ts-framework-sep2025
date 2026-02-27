@@ -21,8 +21,7 @@ test.describe('Danh sách sản phẩm @read @smoke', () => {
   // ═══════════════════════════════════════════════════════════════════════════
 
   test('TC_01: Hiển thị tiêu đề trang khi tải xong', async ({ productsPage }) => {
-    await expect(productsPage.element('pageTitle')).toBeVisible();
-    await expect(productsPage.element('pageTitle')).toHaveText('Cửa hàng');
+    await productsPage.verify.pageTitle('Cửa hàng');
   });
 
   test('TC_02: Hiển thị thẻ sản phẩm khi tải trang', async ({ productsPage }) => {
@@ -40,14 +39,11 @@ test.describe('Danh sách sản phẩm @read @smoke', () => {
   // ═══════════════════════════════════════════════════════════════════════════
 
   test('TC_04: Hiển thị các mục menu điều hướng', async ({ productsPage }) => {
-    await expect(productsPage.element('navHome')).toBeVisible();
-    await expect(productsPage.element('navShop')).toBeVisible();
-    await expect(productsPage.element('navAbout')).toBeVisible();
-    await expect(productsPage.element('navOrderTracking')).toBeVisible();
+    await productsPage.verify.navigation();
   });
 
   test('TC_05: Hiển thị logo trong header', async ({ productsPage }) => {
-    await expect(productsPage.element('logo')).toBeVisible();
+    await productsPage.verify.logo();
   });
 
   test('TC_06: Điều hướng về trang chủ khi click nav home', async ({ productsPage, page }) => {
@@ -80,11 +76,11 @@ test.describe('Danh sách sản phẩm @read @smoke', () => {
   // ═══════════════════════════════════════════════════════════════════════════
 
   test('TC_09: Hiển thị footer', async ({ productsPage }) => {
-    await expect(productsPage.element('footer')).toBeVisible();
+    await productsPage.verify.footer();
   });
 
   test('TC_10: Hiển thị bản quyền trong footer', async ({ productsPage }) => {
-    await expect(productsPage.element('footerCopyright')).toBeVisible();
+    await productsPage.verify.footerCopyright();
   });
 });
 

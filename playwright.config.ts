@@ -40,10 +40,9 @@ dotenvFlow.config({
 // 2️⃣ ĐỌC BIẾN MÔI TRƯỜNG — EnvManager typed getters (string, number)
 // ═══════════════════════════════════════════════════════════════════════════
 const CMS_UI_ORIGIN = EnvManager.get('CMS_UI_ORIGIN');
-const CMS_AUTH_DIR = EnvManager.get('CMS_AUTH_DIR');
 const NEKO_UI_ORIGIN = EnvManager.get('NEKO_UI_ORIGIN');
 const NEKO_API_URL = EnvManager.get('NEKO_API_URL');
-const NEKO_AUTH_DIR = EnvManager.get('NEKO_AUTH_DIR');
+const AUTH_DIR = EnvManager.get('AUTH_DIR', '.auth');
 const DEFAULT_EXPECT_TIMEOUT = EnvManager.getNumber('DEFAULT_EXPECT_TIMEOUT', 30000);
 
 // Mở rộng Playwright test options với viewportType
@@ -127,7 +126,7 @@ export default defineConfig<CustomTestOptions>({
       testIgnore: '**/api/**', // Bỏ qua API tests
       use: {
         baseURL: NEKO_UI_ORIGIN,
-        storageState: `${NEKO_AUTH_DIR}/admin.json`,
+        storageState: `${AUTH_DIR}/neko-admin.json`,
       },
       dependencies: ['neko-setup'],
     },
@@ -153,7 +152,7 @@ export default defineConfig<CustomTestOptions>({
       testIgnore: '**/*.mobile.spec.ts',
       use: {
         viewportType: 'desktop' as const,
-        storageState: `${CMS_AUTH_DIR}/admin.json`,
+        storageState: `${AUTH_DIR}/cms-admin.json`,
       },
       dependencies: ['cms-setup'],
     },
@@ -171,7 +170,7 @@ export default defineConfig<CustomTestOptions>({
       use: {
         ...devices['iPhone 12'],
         viewportType: 'mobile' as const,
-        storageState: `${CMS_AUTH_DIR}/admin.json`,
+        storageState: `${AUTH_DIR}/cms-admin.json`,
       },
       dependencies: ['cms-setup'],
     },

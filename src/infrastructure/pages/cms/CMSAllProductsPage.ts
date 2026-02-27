@@ -25,10 +25,8 @@
  * - Extends: BasePage
  */
 import { expect, Locator, Page } from '@playwright/test';
-import { BasePage } from '../base/BasePage';
+import { BaseTablePage } from '../base/BaseTablePage';
 import { ViewportType } from '../../fixtures/common/ViewportType';
-import { TableResolver } from '@collection/TableResolver';
-import { CollectionHelper } from '@collection/CollectionHelper';
 import { TextMatcher, FieldCleanerMap } from '@collection/FieldResolver';
 import { Logger } from '../../utils/Logger';
 
@@ -80,7 +78,7 @@ export const DEFAULT_PRODUCT_TABLE_COLUMNS: ProductColumnKey[] = [
 // 📌 PAGE OBJECT MODEL: CMSAllProductsPage
 // ============================================================
 
-export class CMSAllProductsPage extends BasePage {
+export class CMSAllProductsPage extends BaseTablePage {
   // ──────────────────────────────────────────────────────────
   // 🔹 PAGE LOCATORS: Định nghĩa tất cả selectors cho page (BASE - Desktop)
   // ──────────────────────────────────────────────────────────
@@ -151,29 +149,19 @@ export class CMSAllProductsPage extends BasePage {
   }
 
   // ═══════════════════════════════════════════════════════════
-  // 📦 COLLECTION HELPER - Lazy initialized
+  // 📦 ABSTRACT IMPLEMENTATIONS (from BaseTablePage)
   // ═══════════════════════════════════════════════════════════
-  private tableResolver: TableResolver | null = null;
-  private _collectionHelper: CollectionHelper<TableResolver> | null = null;
 
-  /**
-   * Đảm bảo TableResolver + CollectionHelper đã được khởi tạo
-   */
-  private async ensureCollectionHelper(): Promise<CollectionHelper<TableResolver>> {
-    if (!this._collectionHelper || !this.tableResolver) {
-      await this.waitForTableReady();
-      this.tableResolver = await TableResolver.create(this.getLocator('tableHeaders'));
-      this._collectionHelper = new CollectionHelper(this.tableResolver);
-    }
-    return this._collectionHelper;
+  protected getTableHeadersLocator(): Locator {
+    return this.getLocator('tableHeaders');
   }
 
-  /**
-   * Reset collection helper cache (gọi khi navigate, search, filter)
-   */
-  private resetCollectionCache(): void {
-    this.tableResolver = null;
-    this._collectionHelper = null;
+  protected getTableRowsLocator(): Locator {
+    return this.getLocator('tableRows');
+  }
+
+  protected getDefaultColumns(): string[] {
+    return [...DEFAULT_PRODUCT_TABLE_COLUMNS];
   }
 
   /**
@@ -258,12 +246,12 @@ export class CMSAllProductsPage extends BasePage {
   // ═══════════════════════════════════════════════════════════
 
   /**
-   * Đợi bảng load xong với nhiều checks để đảm bảo chắc chắn.
+   * Override: Đợi bảng load xong với thêm check table container + name cell.
    *
    * ⚠️ Khi chạy parallel (14 workers), server CMS bị quá tải →
    * response chậm hơn bình thường → cần timeout dài hơn cho rows.
    */
-  async waitForTableReady() {
+  override async waitForTableReady() {
     // 0. Đợi network ổn định — tránh check DOM khi server chưa trả data xong
     await this.page.waitForLoadState('networkidle');
 
@@ -273,12 +261,12 @@ export class CMSAllProductsPage extends BasePage {
     await expect(table).toBeVisible({ timeout: 10000 });
 
     // 2. Headers đã render
-    const headers = this.getLocator('tableHeaders');
+    const headers = this.getTableHeadersLocator();
     await expect(headers.first()).toBeVisible({ timeout: 5000 });
 
     // 3. Ít nhất 1 row visible (name cell là indicator chính)
     //    Timeout 15s vì parallel run → server chậm → tbody có thể trống lâu
-    const rows = this.getRowsLocator();
+    const rows = this.getTableRowsLocator();
     await expect(rows.first()).toBeVisible({ timeout: 15000 });
 
     const firstRow = rows.first();
@@ -294,11 +282,11 @@ export class CMSAllProductsPage extends BasePage {
   ]);
 
   /**
-   * Lấy giá trị từ một field cho một row
+   * Override: Extract field value (checkbox-aware).
    * Checkbox columns: đọc isChecked() → "Yes"/"No"
    * Regular columns: dùng CollectionHelper.getFieldValue()
    */
-  private async getFieldValueForRow(
+  protected override async getFieldValueForRow(
     row: Locator,
     field: string,
   ): Promise<string> {
@@ -314,139 +302,26 @@ export class CMSAllProductsPage extends BasePage {
   }
 
   // ═══════════════════════════════════════════════════════════
-  // 📍 TABLE DATA EXTRACTION - Lấy dữ liệu từ bảng
+  // 📍 TABLE ROW FINDER — Page-specific overrides
   // ═══════════════════════════════════════════════════════════
 
   /**
-   * Lấy locator cho tất cả rows trong bảng (trừ detail rows của Footable).
+   * Override findRowByColumnValue to pass fieldCleaners.
    */
-  private getRowsLocator(): Locator {
-    return this.getLocator('tableRows');
-  }
-
-  /**
-   * Đếm số dòng hiện tại trong bảng.
-   * Đợi table ready trước khi đếm để tránh race condition.
-   */
-  async getRowCount(): Promise<number> {
-    await this.waitForTableReady();
-    return this.getRowsLocator().count();
-  }
-
-  /**
-   * Lấy tất cả giá trị của một cột.
-   *
-   */
-  async getColumnValues(columnKey: ColumnKey): Promise<string[]> {
-    await this.ensureCollectionHelper();
-    const rows = this.getRowsLocator();
-    
-    // Đợi rows ổn định trước khi đếm
-    await expect(rows.first()).toBeVisible({ timeout: 10000 });
-    
-    const count = await rows.count();
-    const values: string[] = [];
-
-    for (let i = 0; i < count; i++) {
-      values.push(await this.getFieldValueForRow(rows.nth(i), columnKey));
-    }
-    return values;
-  }
-
-  /**
-   * Lấy dữ liệu của nhiều cột từ bảng.
-   *
-   */
-  async getTableData(columnKeys: ColumnKey[]): Promise<Array<Record<string, string>>> {
-    await this.ensureCollectionHelper();
-    const rows = this.getRowsLocator();
-    
-    // Đợi rows ổn định trước khi đếm — tránh race condition khi table re-render
-    await expect(rows.first()).toBeVisible({ timeout: 10000 });
-    
-    const count = await rows.count();
-    Logger.info(`${this.logPrefix}📊 Table rows count: ${count}`);
-    
-    const result: Array<Record<string, string>> = [];
-
-    for (let i = 0; i < count; i++) {
-      const row = rows.nth(i);
-      const data: Record<string, string> = {};
-      for (const key of columnKeys) {
-        data[key] = await this.getFieldValueForRow(row, key);
-      }
-      result.push(data);
-    }
-    return result;
-  }
-
-  /**
-   * Lấy dữ liệu của tất cả các cột mặc định
-   */
-  async getDefaultTableData() {
-    return this.getTableData(DEFAULT_PRODUCT_TABLE_COLUMNS as unknown as Array<ProductColumnKey>);
-  }
-
-  // ═══════════════════════════════════════════════════════════
-  // 📍 TABLE ROW FINDER - Tìm row theo điều kiện
-  // ═══════════════════════════════════════════════════════════
-
-  /**
-   * Tìm row đầu tiên khớp với giá trị cột
-   */
-  async findRowByColumnValue(
+  override async findRowByColumnValue(
     columnKey: ColumnKey,
     matcher: TextMatcher
   ): Promise<Locator> {
-    const helper = await this.ensureCollectionHelper();
-    return helper.findItem(
-      this.getRowsLocator(),
-      columnKey,
-      matcher,
-      this.fieldCleaners
-    );
+    return super.findRowByColumnValue(columnKey, matcher, this.fieldCleaners);
   }
 
   /**
-   * Tìm row đầu tiên khớp với filters (chỉ tìm trong trang hiện tại)
+   * Override findRowByFilters to pass fieldCleaners.
    */
-  async findRowByFilters(
+  override async findRowByFilters(
     filters: ColumnFilters
   ): Promise<Locator> {
-    const helper = await this.ensureCollectionHelper();
-    return helper.findItemByFilters(
-      this.getRowsLocator(),
-      filters,
-      this.fieldCleaners
-    );
-  }
-
-  /**
-   * Lấy dữ liệu từ row cho nhiều columns (checkbox-aware)
-   */
-  private async getRowDataForItem(
-    row: Locator,
-    columnKeys: ColumnKey[],
-  ): Promise<Record<string, string>> {
-    const data: Record<string, string> = {};
-    for (const key of columnKeys) {
-      data[key] = await this.getFieldValueForRow(row, key);
-    }
-    return data;
-  }
-
-  /**
-   * Lấy dữ liệu của row khớp với filters
-   */
-  async getRowDataByFilters(
-    filters: ColumnFilters,
-    columnKeys?: ColumnKey[]
-  ): Promise<Record<string, string>> {
-    const row = await this.findRowByFilters(filters);
-    return this.getRowDataForItem(
-      row,
-      columnKeys || (DEFAULT_PRODUCT_TABLE_COLUMNS as unknown as Array<ProductColumnKey>),
-    );
+    return super.findRowByFilters(filters, this.fieldCleaners);
   }
 
   /**
@@ -505,7 +380,7 @@ export class CMSAllProductsPage extends BasePage {
   ): Promise<{ row: Locator; pageNumber: number }> {
     const helper = await this.ensureCollectionHelper();
     const result = await helper.findItemWithNextPage(
-      () => this.getRowsLocator(),
+      () => this.getTableRowsLocator(),
       Object.keys(filters)[0],
       Object.values(filters)[0],
       {
@@ -529,7 +404,7 @@ export class CMSAllProductsPage extends BasePage {
     const { row, pageNumber } = await this.findRowByFiltersAcrossPages(filters, options);
     const data = await this.getRowDataForItem(
       row,
-      columnKeys || (DEFAULT_PRODUCT_TABLE_COLUMNS as unknown as Array<ProductColumnKey>),
+      columnKeys || this.getDefaultColumns(),
     );
     return { data, pageNumber };
   }

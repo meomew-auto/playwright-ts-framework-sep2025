@@ -24,9 +24,9 @@ import fs from 'fs';
 import path from 'path';
 import { EnvManager } from '../../../utils/EnvManager';
 
-// Storage state file path from env (same as NekoAuthProvider uses)
-const authDir = EnvManager.get('NEKO_AUTH_DIR', 'auth');
-const storageStatePath = path.resolve(authDir, 'admin.json');
+// Storage state file path — dùng chung AUTH_DIR với các project khác
+const authDir = EnvManager.get('AUTH_DIR', '.auth');
+const storageStatePath = path.resolve(authDir, 'neko-admin.json');
 
 // ─────────────────────────────────────────────────────────────────────────
 // TYPE DEFINITIONS

@@ -81,17 +81,17 @@ const ROLE_CONFIGS: Record<RoleName, RoleCredentials> = {
   admin: {
     email: 'admin@example.com',
     password: 'admin123',
-    storageStatePath: '.auth/admin.json',
+    storageStatePath: '.auth/cms-admin.json',
   },
   staff: {
     email: 'staff@example.com', 
     password: 'staff123',
-    storageStatePath: '.auth/staff.json',
+    storageStatePath: '.auth/cms-staff.json',
   },
   customer: {
     email: 'customer@example.com',
     password: 'customer123',
-    storageStatePath: '.auth/customer.json',
+    storageStatePath: '.auth/cms-customer.json',
   },
 };
 

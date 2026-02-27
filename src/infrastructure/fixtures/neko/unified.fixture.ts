@@ -5,23 +5,26 @@
  *
  * 🎯 MỤC ĐÍCH:
  * Kết hợp tất cả fixtures của project Neko Coffee:
- * - UI: productPage, authedPage
- * - API: productService, categoryService, authToken
+ * - UI: productsPage, ordersPage, authedPage
+ * - API: productService, orderService, authToken
  * - Role: asRole() cho multi-user testing
  *
  * 📚 CÁCH DÙNG:
  * ```typescript
  * import { test, expect } from '@fixtures/neko/unified.fixture';
  *
- * test('Full test', async ({ productPage, productService, asRole }) => {
- *   // UI
- *   await productPage.expectMinProducts(5);
- *   
- *   // API
- *   const products = await productService.getProducts();
- *   
- *   // Multi-role
- *   const staffPage = await asRole('staff');
+ * // UI + API (default admin role)
+ * test('Admin test', async ({ ordersPage, orderService }) => {
+ *   await ordersPage.goto();
+ *   const orders = await orderService.getOrders();
+ * });
+ *
+ * // Multi-role
+ * test('Admin vs Staff', async ({ ordersPage, asRole }) => {
+ *   await ordersPage.goto();                        // admin
+ *   const staff = await asRole('staff');
+ *   await staff.ordersPage.goto();                  // staff UI
+ *   const staffOrders = await staff.orderService.getOrders(); // staff API
  * });
  * ```
  */
@@ -32,15 +35,14 @@ import { mergeTests, expect } from '@playwright/test';
 // IMPORT PROJECT FIXTURES
 // ═══════════════════════════════════════════════════════════════════════════
 
-// Neko UI Test
+// Neko UI Test (auth + POMs)
 import { test as nekoUiTest, GatekeeperFixtures } from './ui/gatekeeper.fixture';
 
-// Neko API Test
+// Neko API Test (authToken + services)
 import { test as nekoApiTest, GatekeeperApiFixtures } from './api/gatekeeper.api.fixture';
 
-// Common Role Test (shared across projects)
-// TODO: Uncomment when role fixture is implemented
-// import { test as roleTest, RoleFixtures } from '../common/role.fixture';
+// Neko Role Test (asRole for multi-user)
+import { test as roleTest, RoleFixtures } from './role.fixture';
 
 // ═══════════════════════════════════════════════════════════════════════════
 // MERGED FIXTURE
@@ -48,15 +50,13 @@ import { test as nekoApiTest, GatekeeperApiFixtures } from './api/gatekeeper.api
 
 /**
  * Neko Coffee Unified Test
- * 
+ *
  * Includes:
- * - UI: authedPage, productPage
- * - API: authToken, apiRequest, productService, categoryService
+ * - UI: authedPage, productsPage, ordersPage
+ * - API: authToken, apiRequest, productService, orderService
+ * - Role: asRole('admin' | 'staff') → NekoRoleContext
  */
-export const test = mergeTests(nekoUiTest, nekoApiTest);
-
-// Khi thêm role fixture:
-// export const test = mergeTests(nekoUiTest, nekoApiTest, roleTest);
+export const test = mergeTests(nekoUiTest, nekoApiTest, roleTest);
 
 // Re-export expect
 export { expect };
@@ -65,5 +65,5 @@ export { expect };
 // TYPE EXPORTS
 // ═══════════════════════════════════════════════════════════════════════════
 
-export type NekoUnifiedFixtures = GatekeeperFixtures & GatekeeperApiFixtures;
-// Khi thêm role: export type NekoUnifiedFixtures = GatekeeperFixtures & GatekeeperApiFixtures & RoleFixtures;
+export type NekoUnifiedFixtures = GatekeeperFixtures & GatekeeperApiFixtures & RoleFixtures;
+

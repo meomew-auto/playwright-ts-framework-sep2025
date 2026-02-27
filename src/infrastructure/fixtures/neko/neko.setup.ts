@@ -4,7 +4,7 @@
  * ═══════════════════════════════════════════════════════════════════════════
  *
  * 🎯 MỤC ĐÍCH:
- * Tạo file storageState (.auth/neko-admin.json) chứa localStorage data.
+ * Tạo file storageState (.auth/neko-admin.json) cho admin role.
  * Khác CMS (cookie-based), Neko lưu JWT trong localStorage key `neko_auth`.
  *
  * 📌 FLOW:
@@ -12,9 +12,16 @@
  * 2. Nếu valid → skip
  * 3. Nếu invalid → gọi API login → tạo Zustand format → save file
  *
+ * 📌 MULTI-ROLE:
+ * Setup chỉ login ADMIN (mặc định, chạy mọi test).
+ * Roles khác (staff, manager) → lazy login trong role.fixture.ts
+ * khi test gọi asRole('staff') hoặc asRole('manager').
+ *
  * 🔗 LIÊN KẾT:
  * - Dùng: NekoAuthProvider (login + createStorageState)
- * - Tạo ra: .auth/neko-admin.json → dùng bởi auth.fixture.ts + auth.api.fixture.ts
+ * - Tạo ra: .auth/neko-admin.json
+ * - Dùng bởi: auth.fixture.ts, auth.api.fixture.ts
+ * - Roles khác: role.fixture.ts (lazy login)
  */
 
 import { test as setup, expect } from '@playwright/test';
@@ -22,16 +29,13 @@ import { nekoAuth } from './NekoAuthProvider';
 import { Logger } from '@utils/Logger';
 
 setup('Neko Coffee Authentication', async ({ request }) => {
-  // Check if storage state is still valid
   if (nekoAuth.isStorageStateValid('admin')) {
-    Logger.info('Storage state valid, skipping login', { context: 'setup' });
+    Logger.info('Storage state valid for admin, skipping login', { context: 'setup' });
     return;
   }
 
-  // Login and save storage state
   Logger.info('Logging in as admin...', { context: 'setup' });
   const result = await nekoAuth.loginAndSave(request, 'admin');
-  
   expect(result.accessToken).toBeTruthy();
-  Logger.info('Authentication complete', { context: 'setup' });
+  Logger.info('Authentication complete for admin', { context: 'setup' });
 });
